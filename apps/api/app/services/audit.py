@@ -15,10 +15,10 @@ class AuditAction:
     LOGIN_FAILED = "auth.login_failed"
     LOGIN_LOCKED = "auth.login_locked"
     LOGOUT = "auth.logout"
-    PASSWORD_CHANGED = "auth.password_changed"
+    PASSWORD_CHANGED = "auth.password_changed"  # noqa: S105 (nome de ação, não senha)
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
-    USER_PASSWORD_RESET = "user.password_reset"
+    USER_PASSWORD_RESET = "user.password_reset"  # noqa: S105
     ACCESS_DENIED = "security.access_denied"
 
 
