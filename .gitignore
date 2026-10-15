@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Ambiente e segredos (nunca versionar)
+.env
+.env.*
+!.env.example
+
+# Dados locais (banco SQLite, arquivos importados)
+apps/api/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Node / frontend
+node_modules/
+apps/web/dist/
+*.tsbuildinfo
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
