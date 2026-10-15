@@ -51,7 +51,7 @@ class ImportBatch(Base):
     )
 
     file_name: Mapped[str] = mapped_column(String(255))
-    # Idempotência: o mesmo arquivo (mesmo SHA-256) não é processado duas vezes sem pedido explícito.
+    # Idempotência: o mesmo arquivo (mesmo SHA-256) não é reprocessado sem pedido explícito.
     file_sha256: Mapped[str] = mapped_column(String(64), index=True)
     file_size: Mapped[int | None] = mapped_column(Integer)
     storage_path: Mapped[str | None] = mapped_column(String(500))
@@ -65,7 +65,9 @@ class ImportBatch(Base):
     reference_period: Mapped[str | None] = mapped_column(String(7))  # AAAA-MM
     template_version: Mapped[str | None] = mapped_column(String(20))
 
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -94,7 +96,9 @@ class ImportRow(Base):
     row_number: Mapped[int] = mapped_column(Integer)
     raw: Mapped[dict] = mapped_column(JSONType)
     row_hash: Mapped[str] = mapped_column(String(64))
-    outcome: Mapped[RowOutcome] = mapped_column(str_enum(RowOutcome, 16), default=RowOutcome.PENDING)
+    outcome: Mapped[RowOutcome] = mapped_column(
+        str_enum(RowOutcome, 16), default=RowOutcome.PENDING
+    )
     application_id: Mapped[int | None] = mapped_column(
         ForeignKey("applications.id", ondelete="SET NULL")
     )

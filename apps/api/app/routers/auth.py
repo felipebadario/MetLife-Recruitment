@@ -49,7 +49,9 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
             minutes = get_settings().login_lockout_minutes
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Muitas tentativas. Acesso bloqueado temporariamente por {minutes} minutos.",
+                detail=(
+                    f"Muitas tentativas. Acesso bloqueado temporariamente por {minutes} minutos."
+                ),
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha incorretos."

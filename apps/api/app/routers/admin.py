@@ -92,7 +92,8 @@ def update_user(
         )
     if user.id == actor.id and changes.get("is_active") is False:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Você não pode desativar o próprio acesso."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Você não pode desativar o próprio acesso.",
         )
 
     applied: dict[str, object] = {}

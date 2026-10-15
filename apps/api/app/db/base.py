@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, DateTime, Enum, MetaData, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -21,7 +21,7 @@ JSONType = JSON().with_variant(JSONB(), "postgresql")
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def str_enum(enum_cls: type[enum.Enum], length: int = 32) -> Enum:

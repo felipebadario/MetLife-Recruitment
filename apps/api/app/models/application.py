@@ -48,7 +48,9 @@ class Application(TimestampMixin, Base):
     candidate_id: Mapped[int] = mapped_column(
         ForeignKey("candidates.id", ondelete="RESTRICT"), index=True
     )
-    agency_id: Mapped[int] = mapped_column(ForeignKey("agencies.id", ondelete="RESTRICT"), index=True)
+    agency_id: Mapped[int] = mapped_column(
+        ForeignKey("agencies.id", ondelete="RESTRICT"), index=True
+    )
 
     # IDENTIFICAÇÃO
     external_record_id: Mapped[str | None] = mapped_column(String(100))  # "ID do registro"
@@ -139,7 +141,9 @@ class ApplicationStatusHistory(Base):
     to_status_id: Mapped[int | None] = mapped_column(
         ForeignKey("process_statuses.id", ondelete="SET NULL")
     )
-    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
     source: Mapped[ChangeSource] = mapped_column(str_enum(ChangeSource, 16))
     import_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_batches.id", ondelete="SET NULL")

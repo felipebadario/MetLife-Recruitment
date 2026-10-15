@@ -119,7 +119,10 @@ def main(argv: list[str] | None = None) -> None:
 
             get_settings.cache_clear()
         _migrate()
-        print("\nPróximo passo: python -m app.cli create-user --role admin --name 'Seu Nome' --email voce@empresa.com")
+        print(
+            "\nPróximo passo: python -m app.cli create-user --role admin "
+            "--name 'Seu Nome' --email voce@empresa.com"
+        )
     elif args.command == "migrate":
         _migrate()
     elif args.command == "create-user":
