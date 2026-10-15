@@ -13,18 +13,20 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: apps/api/requirements*.txt
       - run: pip install -r requirements-dev.txt
       - name: Lint
-        run: ruff check .
+        run: ruff check --output-format=github .
       - name: Testes
-        run: pytest
+        if: success() || failure()
+        run: pytest -p no:cacheprovider -rA --tb=short
       - name: Migrações aplicam do zero e batem com os modelos
+        if: success() || failure()
         env:
           DATABASE_URL: sqlite:////tmp/ci-check.db
         run: |
@@ -38,8 +40,8 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       - run: npm install --no-audit --no-fund
