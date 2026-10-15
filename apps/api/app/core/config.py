@@ -1,0 +1,69 @@
+"""Configuração da aplicação, lida de variáveis de ambiente e do arquivo apps/api/.env."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+API_DIR = Path(__file__).resolve().parents[2]
+REPO_DIR = API_DIR.parents[1]
+DEFAULT_DATA_DIR = API_DIR / "data"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=API_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    app_name: str = "MetLife Recruitment CRM"
+    app_version: str = "0.1.0"
+    environment: Literal["development", "production", "test"] = "development"
+
+    database_url: str = f"sqlite:///{(DEFAULT_DATA_DIR / 'metlife_crm.db').as_posix()}"
+    data_dir: Path = DEFAULT_DATA_DIR
+
+    # Segredos — obrigatórios. Gerados por `python -m app.cli init`.
+    secret_key: str = ""
+    field_encryption_key: str = ""
+    cpf_hash_key: str = ""
+
+    session_hours: int = 8
+    session_cookie_name: str = "mrc_session"
+    cookie_secure: bool = False
+
+    # Proteção contra força bruta no login
+    login_max_attempts: int = 5
+    login_lockout_minutes: int = 15
+
+    demo_mode: bool = True
+
+    # Build do frontend servido pelo backend em produção
+    web_dist_dir: Path = REPO_DIR / "apps" / "web" / "dist"
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
+    def missing_secrets(self) -> list[str]:
+        missing = []
+        if len(self.secret_key) < 32:
+            missing.append("SECRET_KEY")
+        if not self.field_encryption_key:
+            missing.append("FIELD_ENCRYPTION_KEY")
+        if len(self.cpf_hash_key) < 32:
+            missing.append("CPF_HASH_KEY")
+        return missing
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
