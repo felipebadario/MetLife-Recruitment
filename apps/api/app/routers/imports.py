@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
 ImportManager = Annotated[User, Depends(require_permission(Permission.IMPORTS_MANAGE))]
+DataResetter = Annotated[User, Depends(require_permission(Permission.IMPORTS_RESET))]
 
 
 class BatchOut(BaseModel):
@@ -238,7 +239,7 @@ class ResetIn(BaseModel):
 
 
 @router.post("/reset", status_code=status.HTTP_204_NO_CONTENT)
-def reset_candidate_data(payload: ResetIn, request: Request, user: ImportManager, db: DbSession) -> None:
+def reset_candidate_data(payload: ResetIn, request: Request, user: DataResetter, db: DbSession) -> None:
     """Apaga candidatos, candidaturas e importações. Mantém usuários, auditoria e a
     classificação de status e fórmulas dos indicadores."""
     if payload.confirmation.strip().upper() != "APAGAR":

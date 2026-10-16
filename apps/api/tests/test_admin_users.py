@@ -99,9 +99,12 @@ def test_operational_sees_everything_but_admin(client, make_user):
     response = login(client, "op@example.com")
     assert set(response.json()["permissions"]) == {
         "candidates.view", "candidates.view_sensitive", "candidates.export", "candidates.notes_write",
-        "performance.view",
+        "performance.view", "imports.manage",
     }
     assert client.get("/api/performance/dashboard").status_code == 200
     assert client.get("/api/candidates").status_code == 200
-    for path in ("/api/admin/users", "/api/admin/statuses", "/api/imports", "/api/admin/audit-logs"):
+    assert client.get("/api/imports").status_code == 200
+    for path in ("/api/admin/users", "/api/admin/statuses", "/api/admin/audit-logs"):
         assert client.get(path).status_code == 403, path
+    # Zerar a base inteira continua só com o administrador.
+    assert client.post("/api/imports/reset", json={"confirmation": "APAGAR"}).status_code == 403

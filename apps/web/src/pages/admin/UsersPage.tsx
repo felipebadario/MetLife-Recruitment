@@ -19,7 +19,7 @@ const USERS_KEY = ["admin", "users"] as const;
 
 const ROLE_HINTS: Record<UserRole, string> = {
   admin: "Acesso total: candidatos, performance, administração e exportação.",
-  operational: "Candidatos e Performance completos, com exportação. Sem acesso ao menu Administração.",
+  operational: "Candidatos, Performance e Importação completos, com exportação. Sem acesso ao menu Administração.",
   viewer: "Somente leitura da aba Candidatos, com CPF, e-mail e telefone mascarados.",
 };
 

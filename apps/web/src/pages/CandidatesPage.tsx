@@ -385,7 +385,7 @@ export function CandidatesPage() {
             description="Os candidatos aparecem aqui depois da importação da planilha de uma turma."
             action={
               can("imports.manage") ? (
-                <Button onClick={() => navigate("/administracao/importacoes")}>Importar planilha</Button>
+                <Button onClick={() => navigate("/importacao")}>Importar planilha</Button>
               ) : undefined
             }
           />

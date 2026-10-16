@@ -7,6 +7,7 @@ export type Permission =
   | "candidates.notes_write"
   | "performance.view"
   | "imports.manage"
+  | "imports.reset"
   | "catalogs.manage"
   | "users.manage"
   | "audit.view"

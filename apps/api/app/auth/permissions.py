@@ -19,6 +19,8 @@ class Permission(str, Enum):
     CANDIDATES_NOTES_WRITE = "candidates.notes_write"
     PERFORMANCE_VIEW = "performance.view"
     IMPORTS_MANAGE = "imports.manage"
+    # Apagar de uma vez todos os candidatos e importações (só administrador)
+    IMPORTS_RESET = "imports.reset"
     CATALOGS_MANAGE = "catalogs.manage"
     USERS_MANAGE = "users.manage"
     AUDIT_VIEW = "audit.view"
@@ -27,7 +29,8 @@ class Permission(str, Enum):
 
 ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
     UserRole.ADMIN: frozenset(Permission),
-    # Operacional: Candidatos e Performance completos, sem o menu Administração.
+    # Operacional: Candidatos, Performance e Importação completos, sem o menu Administração
+    # (nem o "Apagar dados", que zera a base inteira).
     UserRole.OPERATIONAL: frozenset(
         {
             Permission.CANDIDATES_VIEW,
@@ -35,6 +38,7 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.CANDIDATES_EXPORT,
             Permission.CANDIDATES_NOTES_WRITE,
             Permission.PERFORMANCE_VIEW,
+            Permission.IMPORTS_MANAGE,
         }
     ),
     UserRole.VIEWER: frozenset({Permission.CANDIDATES_VIEW}),
