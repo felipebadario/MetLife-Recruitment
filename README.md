@@ -16,11 +16,11 @@ No plano gratuito, o serviço hiberna após um período sem uso; o primeiro aces
 
 ## Como validar com a planilha
 
-1. Em **Administração > Importações**, envie a planilha da turma (.xlsx) ou baixe a **planilha fictícia de teste** no mesmo modelo.
+1. No menu **Importação**, envie a planilha da turma (.xlsx) ou baixe a **planilha fictícia de teste** no mesmo modelo.
 2. Em **Administração > Status e catálogos**, classifique cada status VGCF (Pagamento Confirmado, Reprovado Entrevista...).
 3. Abra **Performance** e **Candidatos**: os indicadores e filtros já refletem a classificação.
 
-Para trocar a base de teste pela real, use **Apagar dados** no fim da página de Importações (mantém usuários e a classificação dos status).
+Para trocar a base de teste pela real, use **Apagar dados** no fim da página de Importação (só o administrador vê; mantém usuários e a classificação dos status).
 
 ## Stack
 
@@ -37,8 +37,8 @@ Em produção, **um único processo** serve a API e o frontend compilado. Decis�
 
 | Perfil | Acesso |
 |---|---|
-| **Administrador** (`admin`) | Tudo: Candidatos, Performance, Administração e exportação. Vê dados pessoais completos. |
-| **Operacional** (`operational`) | Candidatos e Performance completos, com exportação e apresentação. Sem acesso ao menu Administração. |
+| **Administrador** (`admin`) | Tudo: Candidatos, Performance, Importação, Administração e exportação. Vê dados pessoais completos. |
+| **Operacional** (`operational`) | Candidatos, Performance e Importação completos, com exportação e apresentação. Na Importação envia, reprocessa e exclui planilhas, mas não usa o **Apagar dados**. Sem acesso ao menu Administração. |
 | **Visualizador** (`viewer`) | Somente leitura da aba Candidatos. CPF, e-mail e telefone mascarados. Sem exportação. |
 
 As permissões são verificadas no backend; o frontend apenas esconde o que o perfil não acessa.

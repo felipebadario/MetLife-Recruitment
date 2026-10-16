@@ -407,7 +407,7 @@ export function PerformancePage() {
             icon={FileSpreadsheet}
             title="Nenhuma candidatura neste recorte"
             description="Importe a planilha de uma turma ou ajuste os filtros para ver os indicadores."
-            action={<Button onClick={() => navigate("/administracao/importacoes")}>Importar planilha</Button>}
+            action={<Button onClick={() => navigate("/importacao")}>Importar planilha</Button>}
           />
         </Panel>
       ) : data ? (

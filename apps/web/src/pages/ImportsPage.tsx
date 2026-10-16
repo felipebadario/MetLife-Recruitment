@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, FileSpreadsheet, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -383,6 +384,7 @@ function ResetData() {
 }
 
 export function ImportsPage() {
+  const { can } = useAuth();
   const [selected, setSelected] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<ImportBatch | null>(null);
   const batches = useQuery({
@@ -474,7 +476,7 @@ export function ImportsPage() {
           </div>
         )}
       </Panel>
-      <ResetData />
+      {can("imports.reset") && <ResetData />}
       {selected != null && (
         <BatchDialog
           batchId={selected}
