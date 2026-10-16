@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/figtree";
 
 /*
  * Design tokens — MetLife Recruitment CRM
@@ -9,7 +9,8 @@
  * contraste insuficiente — use green-700 para texto e green-500 para marcadores).
  */
 @theme {
-  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Sans geométrica, próxima da tipografia institucional da MetLife (referência: metlife.com.br). */
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-brand-50: #eef6fb;
   --color-brand-100: #d5e9f5;
@@ -40,8 +41,8 @@
   --color-warning-50: #fdf6e7;
   --color-warning-700: #946200;
 
-  --radius-control: 8px;
-  --radius-panel: 12px;
+  --radius-control: 10px;
+  --radius-panel: 14px;
 
   --shadow-panel: 0 1px 2px rgb(22 40 58 / 0.04);
   --shadow-overlay: 0 12px 32px -8px rgb(22 40 58 / 0.18), 0 2px 6px rgb(22 40 58 / 0.06);

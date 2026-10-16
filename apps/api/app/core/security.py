@@ -106,9 +106,13 @@ def password_policy_errors(password: str) -> list[str]:
     return errors
 
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
 def _password_stamp(password_changed_at: datetime | None) -> int:
+    """Instante da última troca de senha, em microssegundos (inteiro exato)."""
     value = as_utc(password_changed_at)
-    return int(value.timestamp()) if value else 0
+    return (value - _EPOCH) // timedelta(microseconds=1) if value else 0
 
 
 def create_session_token(user_id: int, role: str, password_changed_at: datetime | None) -> str:

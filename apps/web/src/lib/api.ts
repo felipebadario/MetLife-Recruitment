@@ -32,6 +32,20 @@ function messageFrom(status: number, body: unknown): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // Pré-visualização sem servidor: a constante é resolvida no build, e o módulo
+  // simulado fica fora do pacote de produção.
+  if (import.meta.env.VITE_PREVIEW === "true") {
+    const { mockRequest } = await import("./mockApi");
+    try {
+      return await mockRequest<T>(method, path, body);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/me") {
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      }
+      throw error;
+    }
+  }
+
   let response: Response;
   try {
     response = await fetch(path, {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation, useMatches } from "react-router";
 
 import { api } from "@/lib/api";
+import { PREVIEW } from "@/lib/preview";
 import type { AppMeta } from "@/lib/types";
 
 import { Sidebar } from "./Sidebar";
@@ -26,7 +27,9 @@ function DemoBanner() {
   return (
     <div className="flex items-center justify-center gap-2 bg-brand-900 px-4 py-1.5 text-center text-xs font-medium text-brand-50">
       <FlaskConical className="size-3.5 shrink-0 text-green-500" aria-hidden />
-      Ambiente de demonstração: todos os dados exibidos são fictícios.
+      {PREVIEW
+        ? "Pré-visualização sem servidor: dados fictícios, guardados apenas neste navegador."
+        : "Ambiente de demonstração: todos os dados exibidos são fictícios."}
     </div>
   );
 }

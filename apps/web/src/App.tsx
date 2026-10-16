@@ -1,9 +1,10 @@
 import { Cable, FileSpreadsheet, ListChecks } from "lucide-react";
-import { Navigate, Outlet, createBrowserRouter } from "react-router";
+import { Navigate, Outlet, createBrowserRouter, createHashRouter, type RouteObject } from "react-router";
 
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { FullScreenLoader, RequireAuth, RequirePermission } from "@/auth/guards";
 import { AppShell, type RouteHandle } from "@/components/layout/AppShell";
+import { PREVIEW } from "@/lib/preview";
 import { CandidatesPage } from "@/pages/CandidatesPage";
 import { NotFoundPage } from "@/pages/ForbiddenPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -30,7 +31,7 @@ function HomeRedirect() {
 
 const handle = (title: string): RouteHandle => ({ title });
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
   {
     element: <Root />,
     children: [
@@ -116,4 +117,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+// A pré-visualização é servida em um endereço fixo; as rotas ficam no fragmento (#/...).
+export const router = (PREVIEW ? createHashRouter : createBrowserRouter)(routes);

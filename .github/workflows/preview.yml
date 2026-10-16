@@ -1,0 +1,40 @@
+name: Pré-visualização
+
+# Gera o frontend em modo de pré-visualização (API simulada no navegador, apenas
+# dados fictícios) e guarda o resultado na branch `preview-dist`, de onde é publicado.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+        env:
+          VITE_PREVIEW: "true"
+      - name: Publica o build na branch preview-dist
+        run: |
+          cd dist
+          git init -q -b preview-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pré-visualização de ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" preview-dist

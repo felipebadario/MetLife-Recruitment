@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // Pré-visualização estática usa caminhos relativos para funcionar em qualquer endereço.
+  base: process.env.VITE_PREVIEW === "true" ? "./" : "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
