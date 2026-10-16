@@ -1,21 +1,22 @@
 /**
  * Gráficos do dashboard, em HTML/CSS: barras finas, cantos de 4px na ponta dos dados,
  * 2px de respiro entre segmentos, eixos discretos, rótulos em tinta de texto (nunca na cor
- * da série) e dica ao passar o mouse. Cor por categoria de resultado, em ordem fixa.
+ * da série) e dica ao passar o mouse. Cor por classificação, na ordem do catálogo.
  */
 import { useState, type ReactNode } from "react";
 
-import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER } from "@/lib/outcomes";
+import { useOutcomes } from "@/lib/outcomes";
 import type { Outcome } from "@/lib/types";
 import { cn, formatNumber } from "@/lib/utils";
 
-export function OutcomeLegend({ outcomes = OUTCOME_ORDER }: { outcomes?: Outcome[] }) {
+export function OutcomeLegend({ outcomes }: { outcomes?: Outcome[] }) {
+  const catalog = useOutcomes();
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-body">
-      {outcomes.map((o) => (
+      {(outcomes ?? catalog.order).map((o) => (
         <li key={o} className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[3px]" style={{ background: OUTCOME_COLORS[o] }} aria-hidden />
-          {OUTCOME_LABELS[o]}
+          <span className="size-2.5 rounded-[3px]" style={{ background: catalog.color(o) }} aria-hidden />
+          {catalog.label(o)}
         </li>
       ))}
     </ul>
@@ -37,10 +38,11 @@ export function CompositionBar({
   className?: string;
   label?: string;
 }) {
-  const total = OUTCOME_ORDER.reduce((n, o) => n + (byOutcome[o] ?? 0), 0);
+  const catalog = useOutcomes();
+  const total = catalog.order.reduce((n, o) => n + (byOutcome[o] ?? 0), 0);
   const [hover, setHover] = useState<Outcome | null>(null);
-  const parts = OUTCOME_ORDER.filter((o) => (byOutcome[o] ?? 0) > 0);
-  const summary = parts.map((o) => `${OUTCOME_LABELS[o]}: ${byOutcome[o]}`).join(", ");
+  const parts = catalog.order.filter((o) => (byOutcome[o] ?? 0) > 0);
+  const summary = parts.map((o) => `${catalog.label(o)}: ${byOutcome[o]}`).join(", ");
 
   return (
     <div className={cn("relative", className)} role="img" aria-label={`${label ? `${label}. ` : ""}${summary}`}>
@@ -51,13 +53,13 @@ export function CompositionBar({
             onMouseEnter={() => setHover(o)}
             onMouseLeave={() => setHover(null)}
             className="h-full first:rounded-l-[4px] last:rounded-r-[4px]"
-            style={{ width: `${(byOutcome[o] / total) * 100}%`, background: OUTCOME_COLORS[o] }}
+            style={{ width: `${(byOutcome[o] / total) * 100}%`, background: catalog.color(o) }}
           />
         ))}
       </div>
       {hover && (
         <div className="pointer-events-none absolute -top-9 left-0 z-10 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-white shadow">
-          {OUTCOME_LABELS[hover]}: {formatNumber(byOutcome[hover])} ({percent(byOutcome[hover], total)})
+          {catalog.label(hover)}: {formatNumber(byOutcome[hover])} ({percent(byOutcome[hover], total)})
         </div>
       )}
     </div>
@@ -105,8 +107,9 @@ export function StackedColumns({
 }: {
   periods: { key: string; label: string; byOutcome: Record<Outcome, number> }[];
 }) {
+  const catalog = useOutcomes();
   const [hover, setHover] = useState<string | null>(null);
-  const totals = periods.map((p) => OUTCOME_ORDER.reduce((n, o) => n + (p.byOutcome[o] ?? 0), 0));
+  const totals = periods.map((p) => catalog.order.reduce((n, o) => n + (p.byOutcome[o] ?? 0), 0));
   const max = Math.max(1, ...totals);
   const ticks = [0, 0.5, 1].map((t) => Math.round(max * t));
 
@@ -134,11 +137,11 @@ export function StackedColumns({
                 onMouseLeave={() => setHover(null)}
               >
                 <div className="flex flex-col-reverse gap-[2px]" style={{ height: `${(total / max) * 100}%` }}>
-                  {OUTCOME_ORDER.filter((o) => (period.byOutcome[o] ?? 0) > 0).map((o, i, arr) => (
+                  {catalog.order.filter((o) => (period.byOutcome[o] ?? 0) > 0).map((o, i, arr) => (
                     <div
                       key={o}
                       className={cn(i === arr.length - 1 && "rounded-t-[4px]")}
-                      style={{ flexGrow: period.byOutcome[o], flexBasis: 0, background: OUTCOME_COLORS[o] }}
+                      style={{ flexGrow: period.byOutcome[o], flexBasis: 0, background: catalog.color(o) }}
                     />
                   ))}
                 </div>
@@ -147,9 +150,9 @@ export function StackedColumns({
                     <p className="mb-1 font-semibold">
                       {period.label}: {formatNumber(total)}
                     </p>
-                    {OUTCOME_ORDER.filter((o) => period.byOutcome[o]).map((o) => (
+                    {catalog.order.filter((o) => period.byOutcome[o]).map((o) => (
                       <p key={o} className="flex justify-between gap-2">
-                        <span>{OUTCOME_LABELS[o]}</span>
+                        <span>{catalog.label(o)}</span>
                         <span className="tabular">{formatNumber(period.byOutcome[o])}</span>
                       </p>
                     ))}

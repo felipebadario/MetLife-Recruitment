@@ -18,22 +18,22 @@ from sqlalchemy import func, select
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
 from app.models import (
+    UNMAPPED_OUTCOME,
     Agency,
     Application,
     Candidate,
     MetricDefinition,
-    ProcessOutcome,
     ProcessStatus,
     User,
 )
 from app.services.filters import OUTCOME_EXPR, ApplicationFilters, application_filters
+from app.services.outcomes import outcome_codes
 
 router = APIRouter(prefix="/api/performance", tags=["performance"])
 
 Analyst = Annotated[User, Depends(require_permission(Permission.PERFORMANCE_VIEW))]
 Filters = Annotated[ApplicationFilters, Depends(application_filters)]
 
-OUTCOMES = [o.value for o in ProcessOutcome]
 # Grupos de perfil com menos candidaturas que isto não têm taxas exibidas (evita conclusões
 # sobre poucos casos e reduz o risco de reidentificação).
 PROFILE_MIN_GROUP = 5
@@ -53,10 +53,6 @@ class Cell:
     susep: str | None
     program: str | None
     count: int
-
-
-def _empty() -> dict[str, int]:
-    return {o: 0 for o in OUTCOMES}
 
 
 def _rates(by_outcome: dict[str, int], metrics: list[MetricDefinition]) -> dict[str, float | None]:
@@ -79,6 +75,11 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         db.scalars(select(MetricDefinition).where(MetricDefinition.is_active).order_by(MetricDefinition.id))
     )
     min_sample = min((m.min_sample_size for m in metrics), default=10)
+    codes = outcome_codes(db)
+
+    def _empty() -> dict[str, int]:
+        # Toda classificação cadastrada aparece, mesmo zerada.
+        return defaultdict(int, {o: 0 for o in codes})
 
     columns = (
         Application.agency_id,
@@ -101,7 +102,7 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     cells = [
         Cell(
             agency_id=r[0], regional=r[1], sub_representative=r[2], status_id=r[3],
-            outcome=r[4].value if isinstance(r[4], ProcessOutcome) else str(r[4]),
+            outcome=str(r[4]),
             cohort=r[5], exam_date=r[6], registered=r[7],
             susep=r[8], program=r[9], count=r[10],
         )
@@ -150,7 +151,7 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         profiles["regional"][c.regional or "Não informado"][c.outcome] += c.count
 
     applications = sum(total.values())
-    classified = applications - total["unmapped"]
+    classified = applications - total[UNMAPPED_OUTCOME]
 
     def metric_values(by_outcome: dict[str, int]) -> list[dict]:
         out = []
@@ -183,7 +184,7 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     unmapped_statuses = [
         {"id": s.id, "label": s.label, "count": by_status.get(s.id, 0)}
         for s in statuses.values()
-        if s.outcome == ProcessOutcome.UNMAPPED and by_status.get(s.id, 0)
+        if s.outcome == UNMAPPED_OUTCOME and by_status.get(s.id, 0)
     ]
 
     profile_labels = {"susep": "SUSEP ativa", "program": "Programa de relacionamento", "regional": "Regional"}
@@ -220,7 +221,7 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
                 {
                     "status_id": sid,
                     "label": statuses[sid].label if sid in statuses else "Sem status",
-                    "outcome": statuses[sid].outcome.value if sid in statuses else "unmapped",
+                    "outcome": statuses[sid].outcome if sid in statuses else UNMAPPED_OUTCOME,
                     "count": count,
                 }
                 for sid, count in by_status.items()

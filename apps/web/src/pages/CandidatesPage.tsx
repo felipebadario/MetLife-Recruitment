@@ -29,7 +29,7 @@ import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
 import { activeFilterCount, filtersFromSearch, filtersToQuery, useFilters, type Filters } from "@/lib/filters";
-import { OUTCOME_TONES } from "@/lib/outcomes";
+import { outcomeTone } from "@/lib/outcomes";
 import type { ApplicationRow, CandidatesSummary, FilterOptions, Page, SavedFilter } from "@/lib/types";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 
@@ -70,7 +70,7 @@ const COLUMNS: Column[] = [
     sort: "status",
     defaultVisible: true,
     render: (r) => (
-      <Badge tone={OUTCOME_TONES[r.status.outcome]} dot>
+      <Badge tone={outcomeTone(r.status.outcome)} dot>
         {r.status.label ?? "Sem status"}
       </Badge>
     ),

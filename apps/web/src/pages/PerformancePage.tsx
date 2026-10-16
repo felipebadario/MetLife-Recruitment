@@ -23,7 +23,7 @@ import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
 import { filtersToQuery, useFilters } from "@/lib/filters";
-import { OUTCOME_COLORS, OUTCOME_LABELS, formatRate } from "@/lib/outcomes";
+import { UNMAPPED, formatRate, useOutcomes } from "@/lib/outcomes";
 import type { Dashboard, FilterOptions, GroupStats } from "@/lib/types";
 import type { Filters } from "@/lib/filters";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
@@ -86,6 +86,7 @@ function GroupTable({
 }
 
 function LossBreakdown({ data }: { data: Dashboard }) {
+  const catalog = useOutcomes();
   const [agencyId, setAgencyId] = useState("");
   const lossStatuses = data.statuses.filter((s) => s.outcome === "rejected" || s.outcome === "withdrawn");
   const counts = new Map<number | null, number>();
@@ -98,11 +99,11 @@ function LossBreakdown({ data }: { data: Dashboard }) {
       key: String(s.status_id),
       label: (
         <>
-          {s.label} <span className="text-muted">({OUTCOME_LABELS[s.outcome]})</span>
+          {s.label} <span className="text-muted">({catalog.label(s.outcome)})</span>
         </>
       ),
       value: counts.get(s.status_id) ?? 0,
-      color: OUTCOME_COLORS[s.outcome],
+      color: catalog.color(s.outcome),
     }))
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -216,6 +217,7 @@ function RepresentativePanel({ data, onSelect }: { data: Dashboard; onSelect: (p
 
 /** Resultado por classificação e por status, no total ou de uma agência específica. */
 function ScopedBreakdown({ data, onClassify }: { data: Dashboard; onClassify: () => void }) {
+  const catalog = useOutcomes();
   const [agencyId, setAgencyId] = useState("");
   const agency = data.agencies.find((a) => String(a.agency_id) === agencyId);
   const byOutcome = agency ? agency.by_outcome : data.totals.by_outcome;
@@ -235,8 +237,8 @@ function ScopedBreakdown({ data, onClassify }: { data: Dashboard; onClassify: ()
             description={agency ? `Candidaturas da agência ${agency.name} por classificação.` : "Candidaturas de todas as agências por classificação."}
           />
           <div className="p-5">
-            <HorizontalBars total={total} rows={outcomeBars(byOutcome)} />
-            {byOutcome.unmapped > 0 && (
+            <HorizontalBars total={total} rows={outcomeBars(byOutcome, catalog)} />
+            {(byOutcome[UNMAPPED] ?? 0) > 0 && (
               <p className="mt-3 text-xs text-muted">
                 Há status sem classificação.{" "}
                 <button type="button" className="font-medium text-brand-600 hover:underline" onClick={onClassify}>
@@ -252,7 +254,7 @@ function ScopedBreakdown({ data, onClassify }: { data: Dashboard; onClassify: ()
             description={agency ? `Status das candidaturas da agência ${agency.name}.` : "Status como vieram da planilha, com a classificação de cada um."}
           />
           <div className="p-5">
-            <HorizontalBars total={total} rows={statusBars(data, { agencyId: agency?.agency_id })} />
+            <HorizontalBars total={total} rows={statusBars(data, catalog, { agencyId: agency?.agency_id })} />
           </div>
         </Panel>
       </div>

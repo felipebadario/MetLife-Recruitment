@@ -5,8 +5,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { activeFilterCount, type Filters } from "@/lib/filters";
-import { OUTCOME_LABELS, OUTCOME_ORDER } from "@/lib/outcomes";
-import type { FilterOptions, Outcome } from "@/lib/types";
+import { useOutcomes } from "@/lib/outcomes";
+import type { FilterOptions } from "@/lib/types";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 interface Option {
@@ -140,7 +140,8 @@ export function FilterBar({
   actions?: ReactNode;
 }) {
   const count = activeFilterCount(filters);
-  const outcomes: Option[] = OUTCOME_ORDER.map((o) => ({ value: o, label: OUTCOME_LABELS[o] }));
+  const catalog = useOutcomes();
+  const outcomes: Option[] = catalog.order.map((o) => ({ value: o, label: catalog.label(o) }));
 
   return (
     <div className="flex flex-col gap-3">
@@ -188,13 +189,13 @@ export function FilterBar({
             value: String(s.id),
             label: s.label,
             count: s.count,
-            hint: OUTCOME_LABELS[s.outcome],
+            hint: catalog.label(s.outcome),
           }))}
         />
         <MultiSelect
           label="Classificação"
           selected={filters.outcome}
-          onChange={(outcome) => onChange({ outcome: outcome as Outcome[] })}
+          onChange={(outcome) => onChange({ outcome })}
           options={outcomes}
         />
         <MultiSelect

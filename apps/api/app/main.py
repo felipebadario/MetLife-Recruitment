@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(candidates.router)
     app.include_router(imports.router)
     app.include_router(catalogs.router)
+    app.include_router(catalogs.public_router)
     app.include_router(performance.router)
 
     _mount_frontend(app, settings.web_dist_dir)

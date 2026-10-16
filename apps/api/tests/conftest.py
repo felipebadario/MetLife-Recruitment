@@ -29,17 +29,20 @@ os.environ["FIELD_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import delete, update  # noqa: E402
+from sqlalchemy import delete, insert, select, update  # noqa: E402
 
 from app.core.config import API_DIR  # noqa: E402
 from app.core.security import hash_password, utcnow  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_sessionmaker  # noqa: E402
 from app.importing.vgcf import VGCF_STATUSES  # noqa: E402
-from app.models import ProcessOutcome, ProcessStatus, User, UserRole  # noqa: E402
+from app.models import UNMAPPED_OUTCOME, ProcessStatus, User, UserRole  # noqa: E402
 
 # Catálogos semeados pelas migrações: preservados entre testes.
 _KEEP_TABLES = {"metric_definitions", "funnel_stages"}
+# Catálogos semeados que os testes podem alterar: voltam ao conteúdo da migração.
+_RESTORE_TABLES = ("metric_definitions", "outcome_categories")
+_SEEDED: dict[str, list[dict]] = {}
 
 PASSWORD = "SenhaForte123"
 
@@ -50,6 +53,10 @@ def _database() -> None:
     cfg = Config(str(API_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(API_DIR / "alembic"))
     command.upgrade(cfg, "head")
+    with get_sessionmaker()() as db:
+        for name in _RESTORE_TABLES:
+            table = Base.metadata.tables[name]
+            _SEEDED[name] = [dict(row._mapping) for row in db.execute(select(table))]
 
 
 @pytest.fixture(autouse=True)
@@ -63,10 +70,13 @@ def _clean_tables() -> Iterator[None]:
                 db.execute(delete(ProcessStatus).where(ProcessStatus.code.notin_(official)))
                 db.execute(
                     update(ProcessStatus).values(
-                        outcome=ProcessOutcome.UNMAPPED, funnel_stage_id=None, abbreviation=None,
+                        outcome=UNMAPPED_OUTCOME, funnel_stage_id=None, abbreviation=None,
                         is_provisional=True,
                     )
                 )
+            elif table.name in _RESTORE_TABLES:
+                db.execute(delete(table))
+                db.execute(insert(table), _SEEDED[table.name])
             elif table.name not in _KEEP_TABLES:
                 db.execute(delete(table))
         db.commit()

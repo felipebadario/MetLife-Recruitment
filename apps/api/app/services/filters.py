@@ -10,7 +10,7 @@ from fastapi import Query
 from sqlalchemy import Select, func, literal_column, or_
 
 from app.core.text import normalize_key
-from app.models import Application, Candidate, ProcessOutcome, ProcessStatus
+from app.models import Application, Candidate, ProcessStatus
 
 # Categoria do status; candidatura sem status (ou sem classificação) conta como "unmapped".
 # O literal vai inline (não como parâmetro) para o PostgreSQL aceitar a expressão no GROUP BY.
@@ -26,7 +26,7 @@ class ApplicationFilters:
     regionals: list[str] = field(default_factory=list)
     sub_representatives: list[str] = field(default_factory=list)
     status_ids: list[int] = field(default_factory=list)
-    outcomes: list[ProcessOutcome] = field(default_factory=list)
+    outcomes: list[str] = field(default_factory=list)
     cohorts: list[str] = field(default_factory=list)
     programs: list[str] = field(default_factory=list)
     susep_active: list[str] = field(default_factory=list)
@@ -81,7 +81,7 @@ def application_filters(
     regional: Annotated[list[str] | None, Query()] = None,
     sub_representative: Annotated[list[str] | None, Query()] = None,
     status_id: Annotated[list[int] | None, Query()] = None,
-    outcome: Annotated[list[ProcessOutcome] | None, Query()] = None,
+    outcome: Annotated[list[str] | None, Query()] = None,
     cohort: Annotated[list[str] | None, Query()] = None,
     program: Annotated[list[str] | None, Query()] = None,
     susep_active: Annotated[list[str] | None, Query()] = None,

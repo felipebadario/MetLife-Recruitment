@@ -1,20 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecks } from "lucide-react";
+import { ListChecks, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { DialogContent, DialogRoot } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input, Select } from "@/components/ui/Field";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
-import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER } from "@/lib/outcomes";
-import type { CatalogStatus, MetricDefinition, Outcome } from "@/lib/types";
+import { EXTRA_COLORS, UNMAPPED, useOutcomes } from "@/lib/outcomes";
+import type { CatalogStatus, MetricDefinition, Outcome, OutcomeCategoryAdmin } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
-
-const CLASSIFIABLE: Outcome[] = OUTCOME_ORDER.filter((o) => o !== "unmapped");
 
 function useRefreshAll() {
   const queryClient = useQueryClient();
@@ -29,8 +28,198 @@ function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : "Não foi possível salvar.";
 }
 
+function plural(n: number, one: string, many: string) {
+  return n === 1 ? `1 ${one}` : `${formatNumber(n)} ${many}`;
+}
+
+/** Amostra de cor clicável que abre o seletor do navegador. */
+function ColorInput({ value, label, onChange }: { value: string; label: string; onChange: (color: string) => void }) {
+  return (
+    <label
+      className="relative size-8 shrink-0 cursor-pointer rounded-md border border-line-strong"
+      style={{ background: value }}
+      title="Trocar a cor"
+    >
+      <input
+        type="color"
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value.toUpperCase())}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+      />
+    </label>
+  );
+}
+
+function OutcomeRow({ outcome, onDelete }: { outcome: OutcomeCategoryAdmin; onDelete: () => void }) {
+  const refresh = useRefreshAll();
+  const [label, setLabel] = useState(outcome.label);
+  const [color, setColor] = useState(outcome.color);
+  const update = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch(`/api/admin/outcomes/${outcome.code}`, body),
+    onSuccess: refresh,
+    onError: () => {
+      setLabel(outcome.label);
+      setColor(outcome.color);
+    },
+  });
+
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-5 py-3">
+      <ColorInput
+        value={color}
+        label={`Cor de ${outcome.label}`}
+        onChange={(next) => {
+          setColor(next);
+          update.mutate({ color: next });
+        }}
+      />
+      <Input
+        aria-label={`Nome da classificação ${outcome.label}`}
+        value={label}
+        maxLength={60}
+        onChange={(e) => setLabel(e.target.value)}
+        onBlur={() => {
+          if (!label.trim()) setLabel(outcome.label);
+          else if (label.trim() !== outcome.label) update.mutate({ label: label.trim() });
+        }}
+        className="h-9 w-56 text-[13px]"
+      />
+      <span className="tabular text-xs text-muted">{plural(outcome.statuses, "status", "status")}</span>
+      {outcome.is_system ? (
+        <Badge className="ml-auto">Do sistema</Badge>
+      ) : (
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={onDelete} aria-label={`Excluir ${outcome.label}`}>
+          <Trash2 className="size-4" aria-hidden />
+          Excluir
+        </Button>
+      )}
+      {update.error && <p className="w-full text-xs text-danger-600">{errorText(update.error)}</p>}
+    </li>
+  );
+}
+
+function NewOutcomeForm({ used }: { used: string[] }) {
+  const refresh = useRefreshAll();
+  const suggestion = EXTRA_COLORS.find((c) => !used.includes(c)) ?? EXTRA_COLORS[0];
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState<string | null>(null);
+  const create = useMutation({
+    mutationFn: () => api.post("/api/admin/outcomes", { label: label.trim(), color: color ?? suggestion }),
+    onSuccess: () => {
+      setLabel("");
+      setColor(null);
+      refresh();
+    },
+  });
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-3 border-t border-line bg-surface/40 px-5 py-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (label.trim()) create.mutate();
+      }}
+    >
+      <ColorInput value={color ?? suggestion} label="Cor da nova classificação" onChange={setColor} />
+      <Input
+        aria-label="Nome da nova classificação"
+        placeholder="Nova classificação"
+        value={label}
+        maxLength={60}
+        onChange={(e) => setLabel(e.target.value)}
+        className="h-9 w-56 text-[13px]"
+      />
+      <Button size="sm" variant="secondary" type="submit" disabled={!label.trim()} loading={create.isPending}>
+        <Plus className="size-4" aria-hidden />
+        Adicionar
+      </Button>
+      {create.error && <p className="w-full text-xs text-danger-600">{errorText(create.error)}</p>}
+    </form>
+  );
+}
+
+function DeleteOutcomeDialog({ outcome, onClose }: { outcome: OutcomeCategoryAdmin; onClose: () => void }) {
+  const refresh = useRefreshAll();
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/api/admin/outcomes/${outcome.code}`),
+    onSuccess: () => {
+      refresh();
+      onClose();
+    },
+  });
+
+  return (
+    <DialogRoot open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent title="Excluir classificação" description={outcome.label}>
+        <div className="flex flex-col gap-4 text-[13px] text-body">
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              {outcome.statuses === 0
+                ? "Nenhum status usa esta classificação."
+                : outcome.statuses === 1
+                  ? "O status que a usa fica sem classificação e sai das taxas até ser classificado de novo."
+                  : `Os ${formatNumber(outcome.statuses)} status que a usam ficam sem classificação e saem das taxas até serem classificados de novo.`}
+            </li>
+            <li>Ela sai das fórmulas dos indicadores em que estiver marcada.</li>
+          </ul>
+          {remove.error && <Alert>{errorText(remove.error)}</Alert>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={() => remove.mutate()} loading={remove.isPending}>
+              <Trash2 className="size-4" aria-hidden />
+              Excluir classificação
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </DialogRoot>
+  );
+}
+
+function OutcomesPanel() {
+  const outcomes = useQuery({
+    queryKey: ["catalog", "outcomes", "admin"],
+    queryFn: () => api.get<OutcomeCategoryAdmin[]>("/api/admin/outcomes"),
+  });
+  const [deleting, setDeleting] = useState<OutcomeCategoryAdmin | null>(null);
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Classificações"
+        description="As opções usadas para classificar os status e montar as taxas. A cor identifica a classificação nos gráficos."
+      />
+      {outcomes.isPending ? (
+        <div className="flex flex-col gap-2.5 p-5">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </div>
+      ) : outcomes.isError ? (
+        <div className="p-5">
+          <Alert>{errorText(outcomes.error)}</Alert>
+        </div>
+      ) : (
+        <>
+          <ul className="divide-y divide-line">
+            {outcomes.data.map((o) => (
+              <OutcomeRow key={`${o.code}-${o.label}-${o.color}`} outcome={o} onDelete={() => setDeleting(o)} />
+            ))}
+          </ul>
+          <NewOutcomeForm used={outcomes.data.map((o) => o.color)} />
+        </>
+      )}
+      {deleting && <DeleteOutcomeDialog outcome={deleting} onClose={() => setDeleting(null)} />}
+    </Panel>
+  );
+}
+
 function StatusRow({ status }: { status: CatalogStatus }) {
   const refresh = useRefreshAll();
+  const catalog = useOutcomes();
   const [label, setLabel] = useState(status.label);
   const [abbreviation, setAbbreviation] = useState(status.abbreviation ?? "");
   const update = useMutation({
@@ -73,17 +262,17 @@ function StatusRow({ status }: { status: CatalogStatus }) {
       </td>
       <td className="px-5 py-3">
         <div className="flex items-center gap-2">
-          <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: OUTCOME_COLORS[status.outcome] }} aria-hidden />
+          <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: catalog.color(status.outcome) }} aria-hidden />
           <Select
             aria-label={`Classificação de ${status.code}`}
             value={status.outcome}
             onChange={(e) => update.mutate({ outcome: e.target.value })}
             className="h-9 min-w-44 text-[13px]"
           >
-            {status.outcome === "unmapped" && <option value="unmapped">Escolha a classificação…</option>}
-            {CLASSIFIABLE.map((o) => (
+            {status.outcome === UNMAPPED && <option value={UNMAPPED}>Escolha a classificação…</option>}
+            {catalog.classifiable.map((o) => (
               <option key={o} value={o}>
-                {OUTCOME_LABELS[o]}
+                {catalog.label(o)}
               </option>
             ))}
           </Select>
@@ -103,11 +292,12 @@ function OutcomeChecks({
   value: Outcome[];
   onChange: (next: Outcome[]) => void;
 }) {
+  const catalog = useOutcomes();
   return (
     <fieldset>
       <legend className="mb-1.5 text-xs font-semibold text-muted">{label}</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        {CLASSIFIABLE.map((o) => (
+        {catalog.classifiable.map((o) => (
           <label key={o} className="flex items-center gap-1.5 text-[13px] text-ink">
             <input
               type="checkbox"
@@ -115,7 +305,7 @@ function OutcomeChecks({
               checked={value.includes(o)}
               onChange={(e) => onChange(e.target.checked ? [...value, o] : value.filter((v) => v !== o))}
             />
-            {OUTCOME_LABELS[o]}
+            {catalog.label(o)}
           </label>
         ))}
       </div>
@@ -181,10 +371,12 @@ export function CatalogsPage() {
     queryKey: ["catalog", "metrics"],
     queryFn: () => api.get<MetricDefinition[]>("/api/admin/metrics"),
   });
-  const unmapped = statuses.data?.filter((s) => s.outcome === "unmapped").length ?? 0;
+  const unmapped = statuses.data?.filter((s) => s.outcome === UNMAPPED).length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
+      <OutcomesPanel />
+
       <Panel>
         <PanelHeader
           title="Classificação dos status"
