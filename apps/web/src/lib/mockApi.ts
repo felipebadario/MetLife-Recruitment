@@ -291,6 +291,7 @@ function route(method: string, path: string, query: URLSearchParams, data: Body)
   }
 
   if (method === "GET" && path === "/api/catalogs/outcomes") return DEFAULT_OUTCOMES;
+  if (method === "GET" && path === "/api/catalogs/fields") return [];
 
   fail(404, "Recurso não disponível na pré-visualização.");
 }

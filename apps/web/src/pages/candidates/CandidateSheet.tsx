@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Sheet, Tabs } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
+import { useSystemFields } from "@/lib/fields";
 import { outcomeTone, useOutcomes } from "@/lib/outcomes";
 import type { ApplicationDetail, TimelineEvent } from "@/lib/types";
 import { formatDate, formatDateTime, formatRegistered } from "@/lib/utils";
@@ -110,6 +111,7 @@ function NoteForm({ applicationId }: { applicationId: number }) {
 
 export function CandidateSheet({ applicationId, onClose }: { applicationId: number | null; onClose: () => void }) {
   const catalog = useOutcomes();
+  const fields = useSystemFields();
   const { can } = useAuth();
   const [tab, setTab] = useState<Tab>("personal");
   const detail = useQuery({
@@ -198,6 +200,9 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
                     ["Classificação", catalog.label(app.status.outcome)],
                     ["Status ENS", app.status_ens],
                     ["Status final", app.status_final],
+                    ...(fields.data ?? [])
+                      .filter((f) => f.custom && f.active)
+                      .map((f) => [f.name, app.custom_fields?.[f.field] ?? null] as [string, ReactNode]),
                     ["Importado pela primeira vez", data.first_import?.file_name ?? null],
                   ]}
                 />

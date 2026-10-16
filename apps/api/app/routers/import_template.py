@@ -14,8 +14,8 @@ from sqlalchemy import delete, select
 
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
-from app.importing.columns import check_columns, load_columns
-from app.importing.template import FIELDS, FIELDS_BY_KEY, Column
+from app.importing.columns import NAME_MAX, check_columns, load_columns
+from app.importing.template import FIELDS, MAX_CUSTOM_FIELDS, Column, is_custom
 from app.models import ImportColumn, User
 from app.services.audit import record_audit
 
@@ -33,6 +33,8 @@ class ColumnOut(BaseModel):
     required: bool
     active: bool
     locked: bool
+    custom: bool
+    default_name: str | None
     default_headers: list[str]
     default_required: bool
     default_active: bool
@@ -44,14 +46,22 @@ class TemplateOut(BaseModel):
 
 
 class ColumnIn(BaseModel):
-    field: str = Field(max_length=40)
+    field: str | None = Field(default=None, max_length=40)  # vazio: campo novo
+    name: str | None = Field(default=None, max_length=NAME_MAX)
     headers: list[Annotated[str, Field(max_length=120)]] = Field(max_length=10)
     required: bool = False
     active: bool = True
 
 
 class TemplateIn(BaseModel):
-    columns: list[ColumnIn] = Field(max_length=len(FIELDS))
+    columns: list[ColumnIn] = Field(max_length=len(FIELDS) + MAX_CUSTOM_FIELDS)
+
+
+def _is_default(column: Column) -> bool:
+    spec = column.spec
+    return spec is not None and (column.display_name, list(column.headers), column.required, column.active) == (
+        spec.name, list(spec.headers), spec.required, spec.active
+    )
 
 
 def _template(db) -> TemplateOut:
@@ -61,21 +71,24 @@ def _template(db) -> TemplateOut:
         spec = column.spec
         out.append(
             ColumnOut(
-                field=spec.key, name=spec.name, description=spec.description, kind=spec.kind,
+                field=column.key, name=column.display_name, kind=column.kind,
+                description=spec.description if spec else "Campo criado aqui. Guardado como veio na planilha.",
                 headers=list(column.headers), required=column.required, active=column.active,
-                locked=spec.locked, default_headers=list(spec.headers), default_required=spec.required,
-                default_active=spec.active,
+                locked=bool(spec and spec.locked), custom=spec is None,
+                default_name=spec.name if spec else None,
+                default_headers=list(spec.headers) if spec else [],
+                default_required=spec.required if spec else False,
+                default_active=spec.active if spec else True,
             )
         )
-    is_default = all(
-        (list(c.headers), c.required, c.active) == (list(c.spec.headers), c.spec.required, c.spec.active)
-        for c in columns
-    )
-    return TemplateOut(columns=out, is_default=is_default)
+    return TemplateOut(columns=out, is_default=all(_is_default(c) for c in columns))
 
 
 def _snapshot(columns: list[Column]) -> dict[str, dict]:
-    return {c.key: {"headers": list(c.headers), "required": c.required, "active": c.active} for c in columns}
+    return {
+        c.key: {"nome": c.display_name, "headers": list(c.headers), "required": c.required, "active": c.active}
+        for c in columns
+    }
 
 
 @router.get("", response_model=TemplateOut)
@@ -86,16 +99,23 @@ def get_template(_: CatalogManager, db: DbSession) -> TemplateOut:
 @router.put("", response_model=TemplateOut)
 def save_template(payload: TemplateIn, request: Request, user: CatalogManager, db: DbSession) -> TemplateOut:
     before = _snapshot(load_columns(db))
+    saved = {row.field: row for row in db.scalars(select(ImportColumn))}
     try:
         columns = check_columns(
-            [Column(c.field, tuple(c.headers), c.required, c.active) for c in payload.columns]
+            [Column(c.field or "", tuple(c.headers), c.required, c.active, c.name or "") for c in payload.columns],
+            existing={key for key in saved if is_custom(key)},
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    saved = {row.field: row for row in db.scalars(select(ImportColumn))}
+    keys = {c.key for c in columns}
+    for key, row in saved.items():
+        if is_custom(key) and key not in keys:
+            db.delete(row)
     for column in columns:
         row = saved.get(column.key) or ImportColumn(field=column.key)
+        spec = column.spec
+        row.label = None if spec is not None and column.name == spec.name else column.name
         row.headers = list(column.headers)
         row.is_required = column.required
         row.is_active = column.active
@@ -104,9 +124,9 @@ def save_template(payload: TemplateIn, request: Request, user: CatalogManager, d
 
     after = _snapshot(load_columns(db))
     changes = {
-        FIELDS_BY_KEY[key].name: {"antes": before[key], "depois": value}
-        for key, value in after.items()
-        if before[key] != value
+        (value or before[key])["nome"]: {"antes": before.get(key), "depois": value}
+        for key in before.keys() | after.keys()
+        if before.get(key) != (value := after.get(key))
     }
     if changes:
         record_audit(
@@ -120,7 +140,7 @@ def save_template(payload: TemplateIn, request: Request, user: CatalogManager, d
 
 @router.delete("", response_model=TemplateOut)
 def reset_template(request: Request, user: CatalogManager, db: DbSession) -> TemplateOut:
-    """Volta ao padrão inicial (planilha "Base_selecao")."""
+    """Volta ao padrão inicial (planilha "Base_selecao"). Os campos criados são retirados."""
     db.execute(delete(ImportColumn))
     db.flush()
     record_audit(

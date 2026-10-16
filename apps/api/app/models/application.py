@@ -114,6 +114,8 @@ class Application(TimestampMixin, Base):
     is_paused_raw: Mapped[str | None] = mapped_column(String(50))
     pause_reason_raw: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)  # "Observações" vindas da planilha
+    # Campos criados em Administração > Padrão da planilha: {chave: texto como veio}.
+    custom_fields: Mapped[dict | None] = mapped_column(JSONType)
 
     # RASTREABILIDADE
     raw_payload: Mapped[dict | None] = mapped_column(JSONType)

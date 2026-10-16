@@ -1,6 +1,8 @@
-"""Lista oficial de status da coluna "Status VGCF" das planilhas de turma.
+"""Lista inicial de status da coluna "Status VGCF" das planilhas de turma.
 
-Fonte: lista informada pela área de negócio. Aqui ficam só os nomes; o significado de
+Fonte: lista informada pela área de negócio. Esses nove já vêm cadastrados; todo valor novo
+que chegar na coluna Status VGCF também entra na lista de Status VGCF (com aviso na
+importação), como "aprovado" ou "declinio" nas planilhas mais recentes. Aqui ficam só os nomes; o significado de
 cada status (aprovado, reprovado, contratado...) continua sendo definido pelo
 administrador em Administração > Status e catálogos.
 

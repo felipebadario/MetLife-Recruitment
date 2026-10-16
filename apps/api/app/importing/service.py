@@ -10,9 +10,9 @@ Regras (ver docs/pending-validations.md para o que ainda depende do negócio):
   registro campo a campo.
 - Candidato: identificado pelo CPF (guardado só como hash, criptografado e mascarado). Sem
   CPF, pelo nome normalizado. Pendente de validação (homônimos sem CPF seriam unidos).
-- Status VGCF: o valor da planilha é ligado ao status oficial de mesmo nome (ou abreviação
-  conhecida, ver app/importing/vgcf.py). Valor fora da lista vira um status próprio, com aviso
-  na importação. Em ambos os casos o significado (aprovado, contratado...) começa "não
+- Status VGCF: o valor da planilha é ligado ao status de mesmo nome da lista inicial
+  (app/importing/vgcf.py). Valor novo entra na lista de Status VGCF como um status próprio,
+  com aviso na importação. Em ambos os casos o significado (aprovado, contratado...) começa "não
   classificado" e é definido pelo administrador.
 """
 
@@ -304,7 +304,7 @@ def get_or_create_status(db: Session, raw: str, cache: dict | None = None) -> Pr
             code, label, description = item.code, item.label, vgcf.DESCRIPTION
         else:
             position, code, label = vgcf.OTHER_POSITION, slug(raw), clean(raw) or slug(raw)
-            description = "Fora da lista oficial VGCF. Criado automaticamente na importação."
+            description = "Status VGCF recebido na planilha. Criado automaticamente na importação."
         status = db.scalar(select(ProcessStatus).where(ProcessStatus.code == code))
         if status is None:
             status = ProcessStatus(
@@ -438,6 +438,7 @@ def _upsert_row(
         "exam_date": sheet.exam_date,
         "site_registered_at": registered,
         "registered_at": registered.astimezone(LOCAL_TZ).date() if registered else None,
+        "custom_fields": v.get("custom_fields") or None,
         "raw_payload": row.raw,
         "row_hash": row_hash,
         "last_import_batch_id": batch.id,

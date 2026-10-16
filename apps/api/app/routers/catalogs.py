@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select, update
 from app.auth.deps import CurrentUser, DbSession, require_permission
 from app.auth.permissions import Permission
 from app.core.text import normalize_key
+from app.importing.columns import load_columns
 from app.importing.vgcf import VGCF_STATUSES
 from app.models import (
     UNMAPPED_OUTCOME,
@@ -70,6 +71,26 @@ class OutcomeUpdate(BaseModel):
 @public_router.get("/outcomes", response_model=list[OutcomeOut])
 def public_outcomes(_: CurrentUser, db: DbSession) -> list[OutcomeOut]:
     return [OutcomeOut(code=c.code, label=c.label, color=c.color, is_system=c.is_system) for c in list_categories(db)]
+
+
+class SystemFieldOut(BaseModel):
+    field: str
+    name: str
+    default_name: str | None
+    custom: bool
+    active: bool
+
+
+@public_router.get("/fields", response_model=list[SystemFieldOut])
+def public_fields(_: CurrentUser, db: DbSession) -> list[SystemFieldOut]:
+    """Nomes dos campos no sistema (Padrão da planilha), para as colunas da tela de Candidatos."""
+    return [
+        SystemFieldOut(
+            field=c.key, name=c.display_name, default_name=c.spec.name if c.spec else None,
+            custom=c.custom, active=c.active,
+        )
+        for c in load_columns(db)
+    ]
 
 
 def _outcomes_admin(db) -> list[OutcomeAdminOut]:
@@ -289,20 +310,20 @@ def _delete_statuses(db, statuses: list[ProcessStatus]) -> None:
 
 
 def _unused(db):
-    """Status fora da lista oficial que nenhuma candidatura usa."""
+    """Status VGCF fora da lista inicial que nenhuma candidatura usa."""
     used = select(Application.status_id).where(Application.status_id.is_not(None))
     return select(ProcessStatus).where(ProcessStatus.code.notin_(OFFICIAL_CODES), ProcessStatus.id.notin_(used))
 
 
 @router.delete("/statuses/{status_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_status(status_id: int, request: Request, user: CatalogManager, db: DbSession) -> None:
-    """Exclui um status recebido das planilhas. Os da lista oficial VGCF e os em uso ficam."""
+    """Exclui um status recebido das planilhas. Os da lista inicial VGCF e os em uso ficam."""
     item = db.get(ProcessStatus, status_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status não encontrado.")
     if item.code in OFFICIAL_CODES:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Status da lista oficial VGCF não pode ser excluído."
+            status_code=status.HTTP_409_CONFLICT, detail="Status da lista inicial VGCF não pode ser excluído."
         )
     in_use = db.scalar(select(func.count()).where(Application.status_id == item.id)) or 0
     if in_use:
@@ -327,7 +348,7 @@ class CleanupOut(BaseModel):
 
 @router.post("/statuses/cleanup", response_model=CleanupOut)
 def delete_unused_statuses(request: Request, user: CatalogManager, db: DbSession) -> CleanupOut:
-    """Exclui de uma vez os status fora da lista oficial sem nenhuma candidatura."""
+    """Exclui de uma vez os status fora da lista inicial sem nenhuma candidatura."""
     statuses = list(db.scalars(_unused(db)))
     if not statuses:
         return CleanupOut(deleted=0)

@@ -13,7 +13,7 @@ import {
   SearchX,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -28,9 +28,10 @@ import { MetricStrip } from "@/components/ui/MetricStrip";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
+import { fieldLabel, useSystemFields } from "@/lib/fields";
 import { activeFilterCount, filtersFromSearch, filtersToQuery, useFilters, type Filters } from "@/lib/filters";
 import { outcomeTone } from "@/lib/outcomes";
-import type { ApplicationRow, CandidatesSummary, FilterOptions, Page, SavedFilter } from "@/lib/types";
+import type { ApplicationRow, CandidatesSummary, FilterOptions, Page, SavedFilter, SystemField } from "@/lib/types";
 import { cn, formatDate, formatNumber, formatRegistered } from "@/lib/utils";
 
 import { CandidateSheet } from "./candidates/CandidateSheet";
@@ -40,6 +41,8 @@ type SortKey = "name" | "external_id" | "agency" | "regional" | "registered_at" 
 interface Column {
   key: string;
   label: string;
+  /** Campo do Padrão da planilha: se o administrador renomeou, vale o nome dado lá. */
+  field?: string;
   sort?: SortKey;
   defaultVisible: boolean;
   render: (row: ApplicationRow) => ReactNode;
@@ -48,17 +51,19 @@ interface Column {
 const COLUMNS: Column[] = [
   {
     key: "name",
+    field: "full_name",
     label: "Candidato",
     sort: "name",
     defaultVisible: true,
     render: (r) => <span className="font-semibold text-ink">{r.full_name}</span>,
   },
-  { key: "id", label: "ID", sort: "external_id", defaultVisible: false, render: (r) => <span className="tabular">{r.external_record_id ?? "—"}</span> },
-  { key: "agency", label: "Agência", sort: "agency", defaultVisible: true, render: (r) => r.agency_name },
-  { key: "regional", label: "Regional", sort: "regional", defaultVisible: true, render: (r) => r.regional ?? "—" },
-  { key: "cohort", label: "Turma", sort: "cohort", defaultVisible: true, render: (r) => r.cohort_name ?? "—" },
+  { key: "id", field: "external_record_id", label: "ID", sort: "external_id", defaultVisible: false, render: (r) => <span className="tabular">{r.external_record_id ?? "—"}</span> },
+  { key: "agency", field: "agency", label: "Agência", sort: "agency", defaultVisible: true, render: (r) => r.agency_name },
+  { key: "regional", field: "regional", label: "Regional", sort: "regional", defaultVisible: true, render: (r) => r.regional ?? "—" },
+  { key: "cohort", field: "cohort_name", label: "Turma", sort: "cohort", defaultVisible: true, render: (r) => r.cohort_name ?? "—" },
   {
     key: "registered",
+    field: "site_registered_at",
     label: "Data de cadastro",
     sort: "registered_at",
     defaultVisible: true,
@@ -66,7 +71,8 @@ const COLUMNS: Column[] = [
   },
   {
     key: "status",
-    label: "Status",
+    field: "status",
+    label: "Status VGCF",
     sort: "status",
     defaultVisible: true,
     render: (r) => (
@@ -75,13 +81,13 @@ const COLUMNS: Column[] = [
       </Badge>
     ),
   },
-  { key: "sub", label: "Representante (R.N)", defaultVisible: true, render: (r) => r.sub_representative ?? "—" },
-  { key: "status_final", label: "Status final", defaultVisible: false, render: (r) => r.status_final ?? "—" },
-  { key: "status_ens", label: "Status ENS", defaultVisible: false, render: (r) => r.status_ens ?? "—" },
-  { key: "executive", label: "Executivo", defaultVisible: false, render: (r) => r.executive ?? "—" },
-  { key: "branch", label: "Código da agência", defaultVisible: false, render: (r) => r.agency_branch ?? "—" },
-  { key: "exams", label: "Provas", defaultVisible: false, render: (r) => <span className="tabular">{r.exams_count ?? "—"}</span> },
-  { key: "suspended", label: "Suspenso", defaultVisible: false, render: (r) => r.suspended ?? "—" },
+  { key: "sub", field: "sub_representative", label: "Representante (R.N)", defaultVisible: true, render: (r) => r.sub_representative ?? "—" },
+  { key: "status_final", field: "status_final", label: "Status final", defaultVisible: false, render: (r) => r.status_final ?? "—" },
+  { key: "status_ens", field: "status_ens", label: "Status ENS", defaultVisible: false, render: (r) => r.status_ens ?? "—" },
+  { key: "executive", field: "executive", label: "Executivo", defaultVisible: false, render: (r) => r.executive ?? "—" },
+  { key: "branch", field: "agency_branch", label: "Código da agência", defaultVisible: false, render: (r) => r.agency_branch ?? "—" },
+  { key: "exams", field: "exams_count", label: "Provas", defaultVisible: false, render: (r) => <span className="tabular">{r.exams_count ?? "—"}</span> },
+  { key: "suspended", field: "suspended", label: "Suspenso", defaultVisible: false, render: (r) => r.suspended ?? "—" },
   {
     key: "exam",
     label: "Data da prova",
@@ -89,9 +95,23 @@ const COLUMNS: Column[] = [
     defaultVisible: false,
     render: (r) => <span className="tabular">{formatDate(r.exam_date)}</span>,
   },
-  { key: "susep", label: "SUSEP ativa", defaultVisible: false, render: (r) => r.susep_active ?? "—" },
-  { key: "program", label: "Programa", defaultVisible: false, render: (r) => r.relationship_program ?? "—" },
+  { key: "susep", field: "susep_active", label: "SUSEP ativa", defaultVisible: false, render: (r) => r.susep_active ?? "—" },
+  { key: "program", field: "relationship_program", label: "Programa", defaultVisible: false, render: (r) => r.relationship_program ?? "—" },
 ];
+
+/** Colunas da tabela com os nomes do Padrão da planilha e os campos novos criados lá. */
+function buildColumns(fields: SystemField[] | undefined): Column[] {
+  const base = COLUMNS.map((c) => (c.field ? { ...c, label: fieldLabel(fields, c.field, c.label) } : c));
+  const custom = (fields ?? [])
+    .filter((f) => f.custom && f.active)
+    .map<Column>((f) => ({
+      key: `campo:${f.field}`,
+      label: f.name,
+      defaultVisible: false,
+      render: (r) => r.custom_fields?.[f.field] ?? "—",
+    }));
+  return [...base, ...custom];
+}
 
 const COLUMNS_STORAGE = "mrc-candidate-columns";
 const PAGE_SIZE = 25;
@@ -213,7 +233,15 @@ function SavedFilters({ filters, onApply }: { filters: Filters; onApply: (f: Fil
   );
 }
 
-function ColumnPicker({ visible, onChange }: { visible: string[]; onChange: (keys: string[]) => void }) {
+function ColumnPicker({
+  columns,
+  visible,
+  onChange,
+}: {
+  columns: Column[];
+  visible: string[];
+  onChange: (keys: string[]) => void;
+}) {
   return (
     <Dropdown.Root>
       <Dropdown.Trigger asChild>
@@ -226,9 +254,9 @@ function ColumnPicker({ visible, onChange }: { visible: string[]; onChange: (key
         <Dropdown.Content
           align="end"
           sideOffset={6}
-          className="z-50 w-56 animate-fade-in rounded-[var(--radius-panel)] border border-line bg-white p-1.5 shadow-[var(--shadow-overlay)]"
+          className="z-50 max-h-[70vh] w-56 animate-fade-in overflow-y-auto rounded-[var(--radius-panel)] border border-line bg-white p-1.5 shadow-[var(--shadow-overlay)]"
         >
-          {COLUMNS.map((column) => {
+          {columns.map((column) => {
             const checked = visible.includes(column.key);
             return (
               <Dropdown.CheckboxItem
@@ -266,6 +294,8 @@ export function CandidatesPage() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; order: "asc" | "desc" }>({ key: "registered_at", order: "desc" });
   const [visible, setVisible] = useState<string[]>(loadColumns);
+  const fields = useSystemFields();
+  const allColumns = useMemo(() => buildColumns(fields.data), [fields.data]);
   const [selected, setSelected] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -300,7 +330,7 @@ export function CandidatesPage() {
   });
 
   const s = summary.data;
-  const columns = COLUMNS.filter((c) => visible.includes(c.key));
+  const columns = allColumns.filter((c) => visible.includes(c.key));
   const totalPages = list.data ? Math.max(1, Math.ceil(list.data.total / PAGE_SIZE)) : 1;
   const emptyBase = list.data?.total === 0 && activeFilterCount(filters) === 0;
 
@@ -361,7 +391,7 @@ export function CandidatesPage() {
             actions={
               <>
                 <SavedFilters filters={filters} onApply={(f) => setFilters(f)} />
-                <ColumnPicker visible={visible} onChange={setVisible} />
+                <ColumnPicker columns={allColumns} visible={visible} onChange={setVisible} />
                 {can("candidates.export") && (
                   <Button variant="secondary" size="sm" onClick={exportExcel} loading={exporting}>
                     <Download className="size-4" aria-hidden />

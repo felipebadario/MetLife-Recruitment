@@ -105,6 +105,8 @@ export interface ApplicationRow {
   executive: string | null;
   suspended: string | null;
   exams_count: number | null;
+  /** Valores dos campos criados em Padrão da planilha, por chave do campo. */
+  custom_fields: Record<string, string | null>;
   status_ens: string | null;
   status_final: string | null;
   evaluation_date: string | null;
@@ -288,9 +290,21 @@ export interface ImportTemplateColumn {
   required: boolean;
   active: boolean;
   locked: boolean;
+  /** Campo criado em Padrão da planilha (sem código), guardado como texto. */
+  custom: boolean;
+  default_name: string | null;
   default_headers: string[];
   default_required: boolean;
   default_active: boolean;
+}
+
+/** Nome em vigor de cada campo no sistema (GET /api/catalogs/fields). */
+export interface SystemField {
+  field: string;
+  name: string;
+  default_name: string | null;
+  custom: boolean;
+  active: boolean;
 }
 
 export interface ImportTemplate {
