@@ -21,7 +21,6 @@ from app.models import (
     Agency,
     Application,
     Candidate,
-    FunnelStage,
     MetricDefinition,
     ProcessOutcome,
     ProcessStatus,
@@ -46,7 +45,6 @@ class Cell:
     regional: str | None
     status_id: int | None
     outcome: str
-    stage_position: int | None
     cohort: str | None
     exam_date: date | None
     registered: date | None
@@ -85,7 +83,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         Application.regional_norm,
         Application.status_id,
         OUTCOME_EXPR,
-        FunnelStage.position,
         Application.cohort_name,
         Application.exam_date,
         Application.registered_at,
@@ -96,15 +93,14 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         select(*columns, func.count(Application.id))
         .join(Candidate, Candidate.id == Application.candidate_id)
         .outerjoin(ProcessStatus, ProcessStatus.id == Application.status_id)
-        .outerjoin(FunnelStage, FunnelStage.id == ProcessStatus.funnel_stage_id)
         .group_by(*columns)
     )
     cells = [
         Cell(
             agency_id=r[0], regional=r[1], status_id=r[2],
             outcome=r[3].value if isinstance(r[3], ProcessOutcome) else str(r[3]),
-            stage_position=r[4], cohort=r[5], exam_date=r[6], registered=r[7],
-            susep=r[8], program=r[9], count=r[10],
+            cohort=r[4], exam_date=r[5], registered=r[6],
+            susep=r[7], program=r[8], count=r[9],
         )
         for r in db.execute(filters.apply(query))
     ]
@@ -119,9 +115,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
 
     agencies = {a.id: a.name for a in db.scalars(select(Agency))}
     statuses = {s.id: s for s in db.scalars(select(ProcessStatus))}
-    stages = list(
-        db.scalars(select(FunnelStage).where(FunnelStage.is_active).order_by(FunnelStage.position))
-    )
 
     total = _empty()
     by_agency: dict[int, dict[str, int]] = defaultdict(_empty)
@@ -133,7 +126,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     profiles: dict[str, dict[str, dict[str, int]]] = {
         "susep": defaultdict(_empty), "program": defaultdict(_empty), "regional": defaultdict(_empty),
     }
-    stage_reached: dict[int, int] = defaultdict(int)
 
     for c in cells:
         total[c.outcome] += c.count
@@ -148,10 +140,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         profiles["susep"][c.susep or "Não informado"][c.outcome] += c.count
         profiles["program"][c.program or "Não informado"][c.outcome] += c.count
         profiles["regional"][c.regional or "Não informado"][c.outcome] += c.count
-        if c.stage_position is not None:
-            for stage in stages:
-                if stage.position <= c.stage_position:
-                    stage_reached[stage.id] += c.count
 
     applications = sum(total.values())
     classified = applications - total["unmapped"]
@@ -189,13 +177,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         for s in statuses.values()
         if s.outcome == ProcessOutcome.UNMAPPED and by_status.get(s.id, 0)
     ]
-
-    funnel = [{"id": None, "label": "Candidaturas", "count": applications, "is_provisional": False}]
-    funnel += [
-        {"id": s.id, "label": s.label, "count": stage_reached.get(s.id, 0), "is_provisional": s.is_provisional}
-        for s in stages
-    ]
-    stages_mapped = any(s.funnel_stage_id for s in statuses.values())
 
     profile_labels = {"susep": "SUSEP ativa", "program": "Programa de relacionamento", "regional": "Regional"}
     profile_out = []
@@ -242,8 +223,6 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
             {"agency_id": aid, "status_id": sid, "count": count}
             for (aid, sid), count in by_agency_status.items()
         ],
-        "funnel": funnel,
-        "funnel_configured": stages_mapped,
         "timeline": [
             {"period": period, **group_row(by_outcome)} for period, by_outcome in sorted(by_month.items())
         ],

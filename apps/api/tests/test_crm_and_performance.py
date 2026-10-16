@@ -80,18 +80,11 @@ def test_dashboard_lists_unmapped_statuses(client, make_user):
     assert all(m["value"] is None for m in data["metrics"])
 
 
-def test_funnel_uses_stage_positions(client, make_user):
+def test_dashboard_has_no_funnel(client, make_user):
     _seed(client, make_user)
-    stages = client.get("/api/admin/funnel-stages").json()
-    last = stages[-1]
-    for status in client.get("/api/admin/statuses").json():
-        if status["label"] == "Pagamento Confirmado":
-            client.patch(f"/api/admin/statuses/{status['id']}", json={"funnel_stage_id": last["id"]})
     data = client.get("/api/performance/dashboard").json()
-    funnel = {f["label"]: f["count"] for f in data["funnel"]}
-    paga = next(s["count"] for s in data["statuses"] if s["label"] == "Pagamento Confirmado")
-    assert funnel[last["label"]] == paga
-    assert funnel[stages[0]["label"]] == paga  # quem chegou ao fim passou pelas etapas anteriores
+    assert "funnel" not in data
+    assert client.get("/api/admin/funnel-stages").status_code == 404
 
 
 def test_metric_formula_is_configurable(client, make_user):

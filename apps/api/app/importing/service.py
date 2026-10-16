@@ -21,7 +21,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import utcnow
@@ -340,8 +340,9 @@ def _fmt(value: object) -> str | None:
 
 
 def _upsert_row(
-    ctx: _Context, sheet: ParsedSheet, row: ParsedRow
+    ctx: _Context, sheet: ParsedSheet, row: ParsedRow, *, track: bool = True
 ) -> tuple[RowOutcome, Application]:
+    """Cria ou atualiza a candidatura. Com track=False não grava histórico (restauração)."""
     db, batch, v = ctx.db, ctx.batch, row.values
     row_hash = _row_hash(sheet, row)
 
@@ -406,7 +407,7 @@ def _upsert_row(
     agency_names = {a.id: a.name for a in ctx.agencies.values()}
     for name, label in TRACKED_FIELDS.items():
         old, new = getattr(application, name), fields[name]
-        if old != new:
+        if track and old != new:
             if name == "agency_id":
                 old_label = application.agency.name if application.agency else None
                 old, new = old_label, agency_names.get(int(new)) if new else None  # type: ignore[arg-type]
@@ -421,18 +422,19 @@ def _upsert_row(
                 )
             )
     if application.status_raw != v["status"]:
-        db.add(
-            ApplicationStatusHistory(
-                application_id=application.id,
-                from_status_raw=application.status_raw,
-                to_status_raw=v["status"],
-                from_status_id=application.status_id,
-                to_status_id=status.id if status else None,
-                changed_at=now,
-                source=ChangeSource.DEMO if ctx.is_demo else ChangeSource.IMPORT,
-                import_batch_id=batch.id,
+        if track:
+            db.add(
+                ApplicationStatusHistory(
+                    application_id=application.id,
+                    from_status_raw=application.status_raw,
+                    to_status_raw=v["status"],
+                    from_status_id=application.status_id,
+                    to_status_id=status.id if status else None,
+                    changed_at=now,
+                    source=ChangeSource.DEMO if ctx.is_demo else ChangeSource.IMPORT,
+                    import_batch_id=batch.id,
+                )
             )
-        )
         application.status_raw = v["status"]
         application.status_id = status.id if status else None
         application.status_changed_at = now
@@ -440,3 +442,96 @@ def _upsert_row(
         setattr(application, name, value)
     application.candidate_id = candidate.id
     return RowOutcome.UPDATED, application
+
+
+# ---------------------------------------------------------------- exclusão de planilha
+@dataclass
+class DeleteResult:
+    applications_removed: int = 0
+    applications_restored: int = 0
+    candidates_removed: int = 0
+
+
+def delete_batch(db: Session, batch: ImportBatch) -> DeleteResult:
+    """Exclui uma planilha importada e desfaz o que ela trouxe.
+
+    - Candidatura que só veio desta planilha é apagada (com histórico e observações).
+    - Candidatura que também veio de outra planilha é mantida; se esta era a importação
+      mais recente dela, volta aos dados da planilha anterior mais recente.
+    - O histórico gravado por esta planilha é removido.
+    - Candidatos e agências que ficarem sem candidaturas são apagados.
+    """
+    result = DeleteResult()
+    app_ids = set(
+        db.scalars(
+            select(ImportRow.application_id).where(
+                ImportRow.batch_id == batch.id, ImportRow.application_id.is_not(None)
+            )
+        )
+    )
+    done = [ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS]
+    restore: dict[int, list[Application]] = {}
+    for application in db.scalars(select(Application).where(Application.id.in_(app_ids))):
+        other_batches = list(
+            db.scalars(
+                select(ImportRow.batch_id)
+                .join(ImportBatch, ImportBatch.id == ImportRow.batch_id)
+                .where(
+                    ImportRow.application_id == application.id,
+                    ImportRow.batch_id != batch.id,
+                    ImportBatch.status.in_(done),
+                )
+                .order_by(ImportRow.batch_id)
+            )
+        )
+        if not other_batches:
+            db.delete(application)
+            result.applications_removed += 1
+            continue
+        if application.first_import_batch_id == batch.id:
+            application.first_import_batch_id = other_batches[0]
+        if application.last_import_batch_id == batch.id:
+            restore.setdefault(other_batches[-1], []).append(application)
+    db.flush()
+
+    db.execute(delete(ApplicationStatusHistory).where(ApplicationStatusHistory.import_batch_id == batch.id))
+    db.execute(delete(ApplicationFieldChange).where(ApplicationFieldChange.import_batch_id == batch.id))
+
+    for previous_id, applications in restore.items():
+        previous = db.get(ImportBatch, previous_id)
+        result.applications_restored += _restore_from(db, previous, applications)
+
+    db.delete(batch)
+    db.flush()
+    orphans = select(Candidate.id).where(~Candidate.applications.any())
+    result.candidates_removed = len(db.scalars(orphans).all())
+    db.execute(delete(Candidate).where(Candidate.id.in_(orphans)))
+    db.execute(delete(Agency).where(~select(Application.id).where(Application.agency_id == Agency.id).exists()))
+    db.flush()
+    return result
+
+
+def _restore_from(db: Session, previous: ImportBatch, applications: list[Application]) -> int:
+    """Reaplica, sem gerar histórico, os dados que a planilha anterior trazia."""
+    for application in applications:
+        application.last_import_batch_id = previous.id
+    try:
+        sheet = parse_workbook(previous.file_content or b"")
+    except TemplateError:
+        return 0
+    rows = {str(r.values.get("external_record_id")): r for r in sheet.rows if not r.rejected}
+    ctx = _Context(db=db, batch=previous, is_demo=previous.source == ImportSource.DEMO)
+    for mapping in db.scalars(select(ValueMapping)):
+        ctx.value_maps[(mapping.field, mapping.normalized_key)] = mapping.normalized_value
+    restored = 0
+    for application in applications:
+        row = rows.get(application.external_record_id)
+        if row is not None:
+            _upsert_row(ctx, sheet, row, track=False)
+            application.status_changed_at = db.scalar(
+                select(func.max(ApplicationStatusHistory.changed_at)).where(
+                    ApplicationStatusHistory.application_id == application.id
+                )
+            ) or application.status_changed_at
+            restored += 1
+    return restored

@@ -1,8 +1,8 @@
 """Lista oficial de status da coluna "Status VGCF" das planilhas de turma.
 
 Fonte: lista informada pela área de negócio. Aqui ficam só os nomes; o significado de
-cada status (aprovado, reprovado, contratado...) e a etapa do funil continuam sendo
-definidos pelo administrador em Administração > Status e catálogos.
+cada status (aprovado, reprovado, contratado...) continua sendo definido pelo
+administrador em Administração > Status e catálogos.
 
 A planilha traz sempre o nome completo do status. Abreviações não são reconhecidas na
 importação; o administrador pode registrar uma abreviação de exibição no catálogo.

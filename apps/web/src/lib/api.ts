@@ -75,10 +75,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return payload as T;
 }
 
-/** Envia um arquivo (multipart). */
-async function upload<T>(path: string, file: File): Promise<T> {
+/** Envia um arquivo (campo "file") ou vários (campo "files") em multipart. */
+async function upload<T>(path: string, file: File | File[]): Promise<T> {
   const form = new FormData();
-  form.append("file", file);
+  if (Array.isArray(file)) for (const f of file) form.append("files", f);
+  else form.append("file", file);
   const response = await fetch(path, {
     method: "POST",
     credentials: "same-origin",

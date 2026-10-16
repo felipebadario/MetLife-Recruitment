@@ -1,9 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, BarChart3, FileSpreadsheet, ListChecks } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, FileSpreadsheet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import { CompositionBar, FunnelChart, HorizontalBars, OutcomeLegend, StackedColumns } from "@/components/charts/charts";
+import { CompositionBar, HorizontalBars, OutcomeLegend, StackedColumns } from "@/components/charts/charts";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -15,7 +15,7 @@ import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
 import { filtersToQuery, useFilters } from "@/lib/filters";
-import { OUTCOME_COLORS, OUTCOME_LABELS, formatRate } from "@/lib/outcomes";
+import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER, formatRate } from "@/lib/outcomes";
 import type { Dashboard, FilterOptions, GroupStats } from "@/lib/types";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
@@ -361,24 +361,30 @@ export function PerformancePage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Panel>
               <PanelHeader
-                title="Funil de recrutamento"
-                description="Candidaturas que chegaram a cada etapa, com a conversão sobre a etapa anterior."
+                title="Resultado por classificação"
+                description="Candidaturas agrupadas pela classificação de cada status VGCF."
               />
               <div className="p-5">
-                {data.funnel_configured ? (
-                  <FunnelChart steps={data.funnel.map((f) => ({ label: f.label, count: f.count }))} />
-                ) : (
-                  <EmptyState
-                    icon={ListChecks}
-                    className="py-6"
-                    title="Etapas ainda não associadas aos status"
-                    description="Associe cada status a uma etapa do funil em Administração para montar este gráfico."
-                    action={
-                      <Button variant="secondary" size="sm" onClick={() => navigate("/administracao/catalogos")}>
-                        Configurar etapas
-                      </Button>
-                    }
-                  />
+                <HorizontalBars
+                  total={data.totals.applications}
+                  rows={OUTCOME_ORDER.filter((o) => data.totals.by_outcome[o] > 0).map((o) => ({
+                    key: o,
+                    label: OUTCOME_LABELS[o],
+                    value: data.totals.by_outcome[o],
+                    color: OUTCOME_COLORS[o],
+                  }))}
+                />
+                {data.totals.by_outcome.unmapped > 0 && (
+                  <p className="mt-3 text-xs text-muted">
+                    Há status sem classificação.{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-brand-600 hover:underline"
+                      onClick={() => navigate("/administracao/catalogos")}
+                    >
+                      Classificar status
+                    </button>
+                  </p>
                 )}
               </div>
             </Panel>

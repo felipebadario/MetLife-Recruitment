@@ -1,4 +1,4 @@
-"""Catálogos: classificação de status, etapas do funil e fórmulas dos indicadores."""
+"""Catálogos: classificação de status e fórmulas dos indicadores."""
 
 from __future__ import annotations
 
@@ -6,14 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
 from app.importing.vgcf import VGCF_STATUSES
 from app.models import (
     Application,
-    FunnelStage,
     MetricDefinition,
     ProcessOutcome,
     ProcessStatus,
@@ -37,7 +36,6 @@ class StatusOut(BaseModel):
     abbreviation: str | None
     is_official: bool
     outcome: ProcessOutcome
-    funnel_stage_id: int | None
     is_provisional: bool
     raw_values: list[str]
     applications: int
@@ -47,8 +45,6 @@ class StatusUpdate(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=120)
     abbreviation: str | None = Field(default=None, max_length=32)  # texto vazio apaga
     outcome: ProcessOutcome | None = None
-    funnel_stage_id: int | None = None
-    clear_funnel_stage: bool = False
 
 
 @router.get("/statuses", response_model=list[StatusOut])
@@ -68,7 +64,6 @@ def list_statuses(_: CatalogManager, db: DbSession) -> list[StatusOut]:
             abbreviation=s.abbreviation,
             is_official=s.code in OFFICIAL_CODES,
             outcome=s.outcome,
-            funnel_stage_id=s.funnel_stage_id,
             is_provisional=s.is_provisional,
             raw_values=raw.get(s.id, []),
             applications=counts.get(s.id, 0),
@@ -96,14 +91,6 @@ def update_status(
     if payload.outcome is not None and payload.outcome != item.outcome:
         item.outcome = payload.outcome
         changes["outcome"] = payload.outcome.value
-    if payload.clear_funnel_stage and item.funnel_stage_id is not None:
-        item.funnel_stage_id = None
-        changes["funnel_stage_id"] = None
-    elif payload.funnel_stage_id is not None and payload.funnel_stage_id != item.funnel_stage_id:
-        if db.get(FunnelStage, payload.funnel_stage_id) is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Etapa inválida.")
-        item.funnel_stage_id = payload.funnel_stage_id
-        changes["funnel_stage_id"] = payload.funnel_stage_id
     item.is_provisional = item.outcome == ProcessOutcome.UNMAPPED
     db.flush()
     if changes:
@@ -114,89 +101,6 @@ def update_status(
     else:
         db.commit()
     return next(s for s in list_statuses(user, db) if s.id == item.id)
-
-
-# ---------------------------------------------------------------- etapas do funil
-class StageOut(BaseModel):
-    id: int
-    code: str
-    label: str
-    position: int
-    is_active: bool
-    is_provisional: bool
-
-
-class StageIn(BaseModel):
-    label: str = Field(min_length=1, max_length=120)
-
-
-class StageUpdate(BaseModel):
-    label: str | None = Field(default=None, min_length=1, max_length=120)
-    position: int | None = Field(default=None, ge=0, le=1000)
-    is_active: bool | None = None
-
-
-def _stage_out(s: FunnelStage) -> StageOut:
-    return StageOut(
-        id=s.id, code=s.code, label=s.label, position=s.position,
-        is_active=s.is_active, is_provisional=s.is_provisional,
-    )
-
-
-@router.get("/funnel-stages", response_model=list[StageOut])
-def list_stages(_: CatalogManager, db: DbSession) -> list[StageOut]:
-    return [_stage_out(s) for s in db.scalars(select(FunnelStage).order_by(FunnelStage.position, FunnelStage.id))]
-
-
-@router.post("/funnel-stages", response_model=StageOut, status_code=status.HTTP_201_CREATED)
-def create_stage(payload: StageIn, request: Request, user: CatalogManager, db: DbSession) -> StageOut:
-    from app.core.text import slug
-
-    base = slug(payload.label)
-    code, n = base, 2
-    while db.scalar(select(FunnelStage).where(FunnelStage.code == code)):
-        code, n = f"{base}-{n}", n + 1
-    last = db.scalar(select(func.max(FunnelStage.position))) or 0
-    stage = FunnelStage(
-        code=code, label=payload.label.strip(), position=last + 10, is_active=True, is_provisional=False
-    )
-    db.add(stage)
-    db.flush()
-    record_audit(db, action="catalog.stage_created", request=request, actor=user,
-                 entity_type="funnel_stage", entity_id=stage.id, details={"label": stage.label})
-    return _stage_out(stage)
-
-
-@router.patch("/funnel-stages/{stage_id}", response_model=StageOut)
-def update_stage(
-    stage_id: int, payload: StageUpdate, request: Request, user: CatalogManager, db: DbSession
-) -> StageOut:
-    stage = db.get(FunnelStage, stage_id)
-    if stage is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Etapa não encontrada.")
-    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
-    for key, value in changes.items():
-        setattr(stage, key, value.strip() if isinstance(value, str) else value)
-    stage.is_provisional = False
-    db.flush()
-    record_audit(db, action="catalog.stage_updated", request=request, actor=user,
-                 entity_type="funnel_stage", entity_id=stage.id, details=changes)
-    return _stage_out(stage)
-
-
-@router.delete("/funnel-stages/{stage_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_stage(stage_id: int, request: Request, user: CatalogManager, db: DbSession) -> None:
-    stage = db.get(FunnelStage, stage_id)
-    if stage is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Etapa não encontrada.")
-    db.execute(
-        update(ProcessStatus).where(ProcessStatus.funnel_stage_id == stage_id).values(funnel_stage_id=None)
-    )
-    label = stage.label
-    db.delete(stage)
-    db.flush()
-    record_audit(db, action="catalog.stage_deleted", request=request, actor=user,
-                 entity_type="funnel_stage", entity_id=stage_id, details={"label": label})
 
 
 # ---------------------------------------------------------------- indicadores
