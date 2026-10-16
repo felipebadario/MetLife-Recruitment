@@ -1,6 +1,6 @@
 # Regras pendentes de validação
 
-O sistema **não inventa** regras de negócio. Cada item abaixo está modelado de forma configurável e aguarda definição da área de negócio. Atualizado após o recebimento do modelo real da planilha (turma "SAFEE T61 - Prova 21/01/26").
+O sistema **não inventa** regras de negócio. Cada item abaixo está modelado de forma configurável e aguarda definição da área de negócio. Atualizado com o padrão de planilha "Base_selecao" (out/2026), que virou o padrão inicial da importação. O padrão de colunas é configurável em Administração > Padrão da planilha.
 
 | # | Pendência | Onde impacta | Como está hoje |
 |---|---|---|---|
@@ -10,12 +10,17 @@ O sistema **não inventa** regras de negócio. Cada item abaixo está modelado d
 | 4 | **Fórmulas das taxas** (numerador e denominador) | Indicadores | Provisório: classificações relevantes sobre o total de candidaturas classificadas. Editável e marcado "Provisória" até validação |
 | 5 | **Tempo médio de contratação** (de qual data até qual) | Indicador executivo | Não calculado; exibido como pendente |
 | 6 | **Motivos de insucesso**: a planilha não tem essa coluna | Gráfico de insucesso | O painel usa os status classificados como reprovação/desistência |
-| 7 | **Chave da candidatura**: o "ID" da planilha é único e estável entre reenvios? | Deduplicação | A candidatura é localizada pelo ID; reenvio da mesma turma atualiza em vez de duplicar |
-| 8 | **Identificação do candidato** sem CPF | Deduplicação de pessoas | Pelo nome normalizado (sem acentos, maiúsculas ou espaços extras). Homônimos seriam unidos — pendente decidir se a planilha passará a trazer CPF ou outro identificador |
+| 7 | **Chave da candidatura**: a planilha nova não tem ID | Deduplicação | Candidato (CPF) + Turma. Reenvio da mesma turma atualiza em vez de duplicar; o mesmo CPF em outra turma é outra candidatura da mesma pessoa. Se a coluna "ID" for ligada no padrão, ela volta a ser a chave |
+| 8 | **Identificação do candidato** | Deduplicação de pessoas | Pelo CPF (guardado só como hash, criptografado e mascarado). Linha sem CPF ou com CPF inválido: pelo nome normalizado, com aviso. Homônimos com CPFs diferentes são pessoas diferentes |
 | 9 | **Agências**: "AVANTI" e "AVANTI CUIABA" (e casos similares) são a mesma agência? | Ranking | Tratadas como agências distintas, criadas automaticamente na importação |
 | 10 | A planilha de cada turma é **snapshot completo** (todos os candidatos com status atual) ou parcial? | Histórico | Tratada como snapshot: cada reenvio atualiza status e registra a mudança no histórico. Candidatos ausentes em um reenvio não são alterados |
-| 11 | Significado de **Programa Relacionamento** (Integral, Básico) e **SUSEP Ativa?** no processo | Análise de perfil | Usados apenas como dimensões descritivas |
-| 12 | Linhas com **dados faltando** | Importação | ID, Agência e Nome obrigatórios (linha rejeitada sem eles); status vazio e data inválida geram aviso |
+| 11 | Significado de **Programa Relacionamento** (Integral, Básico) e **SUSEP Ativa?** no processo | Análise de perfil | Colunas do modelo anterior, desligadas no padrão inicial; quando lidas, são só dimensões descritivas |
+| 12 | Linhas com **dados faltando** | Importação | Nome do candidato e Nome Agência obrigatórios (linha rejeitada sem eles). Status vazio, CPF inválido, data ou número de provas não reconhecidos geram aviso. Quais colunas são obrigatórias no arquivo é configurável |
+| 16 | **Status VGCF na planilha nova**: as fotos mostram valores como "aprovado" e "declinio", fora da lista oficial do item 1 | Classificação, indicadores | Entram como status novos, sem classificação, com um aviso por valor na importação. Pendente: a lista oficial muda? |
+| 17 | **Status ENS** (aprovada, anulada, suspensa, recuperação, não avaliado, reprovada) e **Status Final** (cadastrada, queda) | Indicadores | Guardados como vieram e exibidos na ficha, sem entrar nas taxas. Pendente: algum deles deve substituir ou complementar o Status VGCF na classificação? |
+| 18 | **R.N**, **Executivo** e **Suspenso** | Filtros, ranking | R.N é tratado como o representante da agência (antigo sub-representante, usado no ranking por representante). Executivo e Suspenso são guardados como vieram. O cabeçalho da coluna Suspenso aparece com grafias diferentes; o padrão aceita "Suspenso", "Suspensado" e "Suspepado" |
+| 19 | **Agência × Nome Agência** | Ranking | A agência é identificada pelo Nome Agência; a coluna Agência (ex.: FLO, POA 2) é guardada como código/praça. Pendente: uma agência pode ter mais de um código? |
+| 20 | **Datas só com mês e ano** (Data Avaliação e Data Cadastro, ex.: Nov/2023) | Período dos indicadores | Gravadas no dia 1º do mês. A Data Cadastro continua sendo a data de referência dos filtros de período |
 | 13 | **Política de retenção** dos dados pessoais (LGPD) | Banco, backups | Auditoria definida: acessos 90 dias, demais ações 365 dias, com limpeza automática (ajustável por variável de ambiente). Candidatos e importações: a definir |
 | 14 | **Hospedagem definitiva**: o Render (EUA, plano gratuito) serve para validação; dados reais em produção dependem de aprovação | Infraestrutura | Ver ADR 0003 |
 | 15 | Campos do briefing ausentes no modelo (CPF, contato, escolaridade, renda, experiências, avaliação comercial) | CRM, análise de perfil | Estrutura do banco pronta para recebê-los; telas mostram apenas o que a planilha traz |

@@ -77,6 +77,14 @@ class ApplicationRow(BaseModel):
     susep_active: str | None
     susep_number: str | None
     relationship_program: str | None
+    cpf_masked: str | None
+    agency_branch: str | None
+    executive: str | None
+    suspended: str | None
+    exams_count: int | None
+    status_ens: str | None
+    status_final: str | None
+    evaluation_date: date | None
     is_demo: bool
 
 
@@ -117,6 +125,14 @@ def _row(app: Application, cand: Candidate, agency: Agency, st: ProcessStatus | 
         susep_active=app.susep_active_raw,
         susep_number=app.susep_number,
         relationship_program=app.relationship_program_raw,
+        cpf_masked=cand.cpf_masked,
+        agency_branch=app.agency_branch_raw,
+        executive=app.executive_raw,
+        suspended=app.suspended_raw,
+        exams_count=app.exams_count,
+        status_ens=app.status_ens_raw,
+        status_final=app.status_final_raw,
+        evaluation_date=app.evaluation_date,
         is_demo=app.is_demo,
     )
 
@@ -364,9 +380,9 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
     ws = wb.active
     ws.title = "Candidaturas"
     header = [
-        "ID", "Nome", "Agência", "Regional", "Sub Representante", "Turma", "Data da prova",
-        "Cadastro no site", "Status", "Classificação", "SUSEP Ativa?", "Número SUSEP",
-        "Programa Relacionamento",
+        "Turma", "CPF (mascarado)", "Candidato", "R.N", "Nome Agência", "Agência", "Regional", "Executivo",
+        "Suspenso", "Provas", "Status VGCF", "Classificação", "Status ENS", "Status Final", "Data Avaliação",
+        "Data Cadastro", "Data da prova", "ID", "SUSEP Ativa?", "Número SUSEP", "Programa Relacionamento",
     ]
     ws.append(header)
     labels = outcome_labels(db)
@@ -377,16 +393,24 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
         row = _row(*r)
         ws.append(
             [
-                row.external_record_id,
-                row.full_name,
-                row.agency_name,
-                row.regional,
-                row.sub_representative,
                 row.cohort_name,
-                row.exam_date,
-                row.registered_at.replace(tzinfo=None) if row.registered_at else None,
+                row.cpf_masked,
+                row.full_name,
+                row.sub_representative,
+                row.agency_name,
+                row.agency_branch,
+                row.regional,
+                row.executive,
+                row.suspended,
+                row.exams_count,
                 row.status_raw,
                 labels.get(row.status.outcome, row.status.outcome),
+                row.status_ens,
+                row.status_final,
+                row.evaluation_date,
+                row.registered_at.replace(tzinfo=None) if row.registered_at else None,
+                row.exam_date,
+                row.external_record_id,
                 row.susep_active,
                 row.susep_number,
                 row.relationship_program,

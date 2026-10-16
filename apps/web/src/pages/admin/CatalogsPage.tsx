@@ -226,6 +226,10 @@ function StatusRow({ status }: { status: CatalogStatus }) {
     mutationFn: (body: Record<string, unknown>) => api.patch(`/api/admin/statuses/${status.id}`, body),
     onSuccess: refresh,
   });
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/api/admin/statuses/${status.id}`),
+    onSuccess: refresh,
+  });
 
   return (
     <tr className="align-top">
@@ -278,6 +282,25 @@ function StatusRow({ status }: { status: CatalogStatus }) {
           </Select>
         </div>
         {update.error && <p className="mt-1 text-xs text-danger-600">{errorText(update.error)}</p>}
+        {remove.error && <p className="mt-1 text-xs text-danger-600">{errorText(remove.error)}</p>}
+      </td>
+      <td className="px-3 py-3 text-right">
+        {!status.is_official && (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Excluir o status ${status.label}`}
+            title={status.applications > 0 ? "Em uso por candidaturas: exclua antes as planilhas que o trouxeram." : "Excluir status"}
+            disabled={status.applications > 0}
+            loading={remove.isPending}
+            onClick={() => {
+              if (window.confirm(`Excluir o status “${status.label}”? Se ele vier de novo numa planilha, volta sem classificação.`))
+                remove.mutate();
+            }}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </Button>
+        )}
       </td>
     </tr>
   );
@@ -372,6 +395,12 @@ export function CatalogsPage() {
     queryFn: () => api.get<MetricDefinition[]>("/api/admin/metrics"),
   });
   const unmapped = statuses.data?.filter((s) => s.outcome === UNMAPPED).length ?? 0;
+  const unused = statuses.data?.filter((s) => !s.is_official && s.applications === 0).length ?? 0;
+  const refresh = useRefreshAll();
+  const cleanup = useMutation({
+    mutationFn: () => api.post<{ deleted: number }>("/api/admin/statuses/cleanup"),
+    onSuccess: refresh,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -380,8 +409,29 @@ export function CatalogsPage() {
       <Panel>
         <PanelHeader
           title="Classificação dos status"
-          description="Cada status da coluna Status VGCF precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos status."
+          description="Cada status da coluna Status VGCF precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos status. Status fora da lista VGCF sem candidaturas podem ser excluídos."
+          actions={
+            unused > 0 ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={cleanup.isPending}
+                onClick={() => {
+                  if (window.confirm(`Excluir ${plural(unused, "status sem uso", "status sem uso")}? Os da lista VGCF e os usados por candidaturas ficam.`))
+                    cleanup.mutate();
+                }}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                Excluir {plural(unused, "status sem uso", "status sem uso")}
+              </Button>
+            ) : null
+          }
         />
+        {cleanup.error && (
+          <div className="px-5 pt-4">
+            <Alert>{errorText(cleanup.error)}</Alert>
+          </div>
+        )}
         {unmapped > 0 && (
           <div className="px-5 pt-4">
             <Alert tone="info">
@@ -408,13 +458,16 @@ export function CatalogsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-[13px]">
+            <table className="w-full min-w-[820px] text-left text-[13px]">
               <thead className="bg-surface/60 text-muted">
                 <tr>
                   <th className="px-5 py-2.5 font-semibold">Status VGCF na planilha</th>
                   <th className="px-5 py-2.5 font-semibold">Nome de exibição</th>
                   <th className="px-5 py-2.5 font-semibold">Abreviação</th>
                   <th className="px-5 py-2.5 font-semibold">Classificação</th>
+                  <th className="px-3 py-2.5">
+                    <span className="sr-only">Excluir</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">

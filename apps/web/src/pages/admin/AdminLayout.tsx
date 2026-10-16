@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { to: "usuarios", label: "Usuários" },
   { to: "catalogos", label: "Status e catálogos" },
+  { to: "padrao-planilha", label: "Padrão da planilha" },
   { to: "integracoes", label: "Integrações" },
   { to: "auditoria", label: "Auditoria" },
 ];

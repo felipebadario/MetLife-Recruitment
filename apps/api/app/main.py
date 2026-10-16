@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
 from app.core.middleware import CSRFMiddleware, SecurityHeadersMiddleware
-from app.routers import admin, auth, candidates, catalogs, imports, meta, performance
+from app.routers import admin, auth, candidates, catalogs, import_template, imports, meta, performance
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(imports.router)
     app.include_router(catalogs.router)
     app.include_router(catalogs.public_router)
+    app.include_router(import_template.router)
     app.include_router(performance.router)
 
     _mount_frontend(app, settings.web_dist_dir)

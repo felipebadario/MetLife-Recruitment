@@ -5,7 +5,7 @@ Aplicação interna de recrutamento de corretores: consolida as planilhas de tur
 ## Estrutura
 
 - `apps/api` — backend Python 3.11+ (FastAPI, SQLAlchemy 2, Alembic). SQLite local; PostgreSQL no Render.
-  - `app/importing/` — leitura do modelo de planilha da turma (`template.py`), lista oficial de status (`vgcf.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
+  - `app/importing/` — campos que a importação sabe ler e leitura da planilha (`template.py`), padrão de colunas em vigor (`columns.py`), lista oficial de status (`vgcf.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
   - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (classificações, classificação de status, fórmulas), `performance` (dashboard).
   - `app/services/filters.py` — filtros globais compartilhados pelo CRM e pelo dashboard.
   - `alembic/versions/` — migrações escritas à mão; o CI roda `alembic check` contra os modelos.
@@ -47,9 +47,10 @@ npm run build                          # checagem de tipos + build
 - Commits e PRs em português; o CI (`.github/workflows/ci.yml`) roda lint, testes em SQLite e PostgreSQL e o build do frontend.
 
 - **Importação**: menu próprio (`/importacao`, permissão `imports.manage`, fora da Administração; `src/pages/ImportsPage.tsx`). Até 20 planilhas por envio (`POST /api/imports/bulk`), processadas em sequência. Uma planilha pode ser excluída (`DELETE /api/imports/{id}`): o que veio só dela é apagado e o que também veio de outra volta aos dados da planilha anterior.
+- **Padrão da planilha configurável**: Administração > Padrão da planilha (`/administracao/padrao-planilha`, `src/pages/admin/ImportTemplatePage.tsx`, API `/api/admin/import-template`). Grava em `import_columns` os nomes de coluna aceitos, se a coluna é lida e se é obrigatória; campo sem linha segue o padrão inicial de `FIELDS` em `template.py` (planilha "Base_selecao": Turma, CPF Candidato, Candidato, R.N, Nome Agência, Agência, Regional, Executivo, Suspenso, Provas, Status VGCF, Status ENS, Status Final, Data Avaliação, Data Cadastro). Campo novo exige código (entrada em `FIELDS` + coluna no modelo). Candidatura identificada por CPF (ou nome) + Turma; com a coluna ID ligada, pelo ID. CPF nunca fica em claro (`raw_payload` guarda mascarado).
 - **Indicadores**: o dashboard (`/api/performance/dashboard`) traz totais, agências, representantes (sub-representante por agência) e status por agência/representante. Peças compartilhadas em `apps/web/src/components/performance/indicators.tsx`; a apresentação exportável (PDF pela impressão, uma página 16:9 por tela) fica em `src/pages/PresentationPage.tsx`, rota `/performance/apresentacao`.
 - **Logo**: símbolo da MetLife redesenhado em SVG (`BrandMark.tsx`) a partir do logotipo enviado; trocar pelo arquivo oficial quando houver.
-- **Classificações editáveis**: ficam em `outcome_categories` (código estável, nome, cor). O administrador cria, renomeia, troca a cor e exclui em Administração > Status e catálogos; excluir devolve os status dela a "não classificado" e a tira das fórmulas (bloqueado se for a única base de uma taxa). "Não classificado" (`unmapped`) é do sistema. O frontend lê a lista por `useOutcomes()` (`src/lib/outcomes.ts`).
+- **Classificações editáveis**: ficam em `outcome_categories` (código estável, nome, cor). O administrador cria, renomeia, troca a cor e exclui em Administração > Status e catálogos; excluir devolve os status dela a "não classificado" e a tira das fórmulas (bloqueado se for a única base de uma taxa). Status fora da lista VGCF sem candidaturas podem ser excluídos (um a um ou "Excluir status sem uso"); se vierem de novo numa planilha, voltam sem classificação. "Não classificado" (`unmapped`) é do sistema. O frontend lê a lista por `useOutcomes()` (`src/lib/outcomes.ts`).
 - **Sem funil**: a análise usa só a classificação dos status. As tabelas `funnel_stages` e `process_statuses.funnel_stage_id` continuam no banco, sem uso, para não perder dados.
 
 ## Situação

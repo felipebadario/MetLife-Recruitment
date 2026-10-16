@@ -8,24 +8,40 @@ from datetime import date
 from openpyxl import load_workbook
 from sqlalchemy import func, select
 
+from app.core.crypto import cpf_hash, normalize_cpf
 from app.db.session import get_sessionmaker
 from app.importing.demo import HEADER, build_cohort_workbook
-from app.importing.template import parse_title, parse_workbook
+from app.importing.template import parse_datetime, parse_title, parse_workbook
 from app.models import (
     UNMAPPED_OUTCOME,
     Application,
     ApplicationStatusHistory,
     Candidate,
+    ImportRow,
     ProcessStatus,
     UserRole,
 )
 from tests.conftest import login
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+# Colunas do padrão (1 = A): Turma, CPF, Candidato, ..., Status VGCF na 11ª. Cabeçalho na linha 1.
+COL = {name: index for index, name in enumerate(HEADER, start=1)}
+FIRST = 2
 
 
 def _workbook(size: int = 20, seed: int = 1) -> bytes:
-    return build_cohort_workbook("DEMO T70", date(2026, 1, 21), first_id=5000, size=size, seed=seed)
+    return build_cohort_workbook("DEMO T70", date(2026, 1, 21), size=size, seed=seed)
+
+
+def _cell(content: bytes, row: int, column: int) -> object:
+    return load_workbook(io.BytesIO(content)).active.cell(row=row, column=column).value
+
+
+def _first_app(content: bytes) -> Application:
+    """Candidatura do primeiro candidato da planilha (localizada pelo CPF)."""
+    digest = cpf_hash(normalize_cpf(str(_cell(content, FIRST, COL["CPF Candidato"]))))
+    with get_sessionmaker()() as db:
+        return db.scalar(select(Application).join(Candidate).where(Candidate.cpf_hash == digest))
 
 
 def _modify(content: bytes, row: int, column: int, value: object) -> bytes:
@@ -53,10 +69,34 @@ def test_title_parsing():
 def test_parser_reads_template():
     sheet = parse_workbook(_workbook(size=12))
     assert sheet.cohort_name == "DEMO T70"
-    assert sheet.exam_date == date(2026, 1, 21)
     assert len(sheet.rows) == 12
     assert not any(r.rejected for r in sheet.rows)
+    assert not sheet.missing_optional
     assert list(sheet.rows[0].raw) == HEADER
+    values = sheet.rows[0].values
+    assert values["cohort_name"] == "DEMO T70" and len(values["cpf"]) == 11
+    assert values["evaluation_date"].date() == date(2026, 1, 1)
+    assert isinstance(values["exams_count"], int)
+
+
+def test_month_year_dates():
+    assert parse_datetime("Nov/2023").date() == date(2023, 11, 1)
+    assert parse_datetime("fev/24").date() == date(2024, 2, 1)
+    assert parse_datetime("Dec-2023").date() == date(2023, 12, 1)
+    assert parse_datetime("11/2023").date() == date(2023, 11, 1)
+    assert parse_datetime("21/01/2026 10:30").date() == date(2026, 1, 21)
+
+
+def test_cpf_is_never_stored_in_clear(client, make_user):
+    _admin(client, make_user)
+    content = _workbook(size=3)
+    _upload(client, content)
+    cpf = normalize_cpf(str(_cell(content, FIRST, COL["CPF Candidato"])))
+    with get_sessionmaker()() as db:
+        candidate = db.scalar(select(Candidate).where(Candidate.cpf_hash == cpf_hash(cpf)))
+        assert candidate.cpf_masked.endswith(cpf[-2:]) and cpf not in candidate.cpf_encrypted
+        for raw in [*db.scalars(select(Application.raw_payload)), *db.scalars(select(ImportRow.raw))]:
+            assert raw["CPF Candidato"].startswith("***.***.")
 
 
 def test_import_creates_records_and_unmapped_statuses(client, make_user):
@@ -98,15 +138,14 @@ def test_status_change_is_recorded_in_history(client, make_user):
     _admin(client, make_user)
     content = _workbook()
     _upload(client, content)
-    # Linha 3 = primeiro candidato; coluna 10 = Status
-    updated = _modify(content, row=3, column=10, value="NOVO-STATUS")
+    updated = _modify(content, row=FIRST, column=COL["Status VGCF"], value="NOVO-STATUS")
     batch = _upload(client, updated, "turma_atualizada.xlsx").json()
     detail = client.get(f"/api/imports/{batch['id']}").json()["batch"]
     assert detail["rows_updated"] == 1 and detail["rows_unchanged"] == 19
 
+    app = _first_app(content)
+    assert app.status_raw == "NOVO-STATUS"
     with get_sessionmaker()() as db:
-        app = db.scalar(select(Application).where(Application.external_record_id == "5000"))
-        assert app.status_raw == "NOVO-STATUS"
         history = list(
             db.scalars(
                 select(ApplicationStatusHistory).where(ApplicationStatusHistory.application_id == app.id)
@@ -120,14 +159,17 @@ def test_status_change_is_recorded_in_history(client, make_user):
 
 def test_invalid_rows_are_rejected_and_reported(client, make_user):
     _admin(client, make_user)
-    content = _modify(_workbook(size=5), row=4, column=6, value=None)  # sem nome
-    content = _modify(content, row=5, column=1, value=5000)  # ID repetido
+    content = _workbook(size=5)
+    content = _modify(content, row=3, column=COL["Candidato"], value=None)  # sem nome
+    # Mesmo CPF duas vezes na mesma turma.
+    content = _modify(content, row=4, column=COL["CPF Candidato"], value=_cell(content, FIRST, COL["CPF Candidato"]))
+    content = _modify(content, row=5, column=COL["CPF Candidato"], value="123.456.789-00")  # inválido: só aviso
     batch = _upload(client, content).json()
     detail = client.get(f"/api/imports/{batch['id']}").json()
     assert detail["batch"]["status"] == "completed_with_errors"
     assert detail["batch"]["rows_rejected"] == 2
     codes = {i["code"] for i in detail["issues"]}
-    assert {"required", "duplicate_id"} <= codes
+    assert {"required", "duplicate_candidate", "invalid_cpf"} <= codes
 
 
 def test_wrong_template_fails_whole_batch(client, make_user):
@@ -154,15 +196,23 @@ def test_same_person_in_two_cohorts_is_one_candidate(client, make_user):
     _admin(client, make_user)
     first = _workbook(size=3, seed=5)
     _upload(client, first)
-    sheet = parse_workbook(first)
-    name = sheet.rows[0].values["full_name"]
-    second = build_cohort_workbook("DEMO T71", date(2026, 2, 21), first_id=6000, size=3, seed=6)
-    second = _modify(second, row=3, column=6, value=name)
+    cpf = _cell(first, FIRST, COL["CPF Candidato"])
+    second = build_cohort_workbook("DEMO T71", date(2026, 2, 21), size=3, seed=6)
+    second = _modify(second, row=FIRST, column=COL["CPF Candidato"], value=cpf)  # nome diferente, mesmo CPF
     _upload(client, second, "t71.xlsx")
     with get_sessionmaker()() as db:
-        candidate = db.scalar(select(Candidate).where(Candidate.full_name == name))
-        apps = db.scalar(select(func.count()).where(Application.candidate_id == candidate.id))
-        assert apps == 2
+        candidate = db.scalar(select(Candidate).where(Candidate.cpf_hash == cpf_hash(normalize_cpf(cpf))))
+        cohorts = set(db.scalars(select(Application.cohort_name).where(Application.candidate_id == candidate.id)))
+        assert cohorts == {"DEMO T70", "DEMO T71"}
+        assert db.scalar(select(func.count()).select_from(Candidate)) == 5
+
+
+def test_homonyms_with_different_cpf_are_different_people(client, make_user):
+    _admin(client, make_user)
+    content = _workbook(size=2)
+    content = _modify(content, row=3, column=COL["Candidato"], value=_cell(content, FIRST, COL["Candidato"]))
+    _upload(client, content)
+    assert _counts() == (2, 2)
 
 
 def test_viewer_cannot_import(client, make_user):
@@ -211,10 +261,11 @@ def test_vgcf_statuses_are_listed_before_any_import(client, make_user):
 
 def test_vgcf_full_names_share_the_official_status(client, make_user):
     _admin(client, make_user)
-    content = _modify(_workbook(size=4), row=3, column=10, value="Pagamento Confirmado")
-    content = _modify(content, row=4, column=10, value="  pagamento   confirmado ")
-    content = _modify(content, row=5, column=10, value="Validacao SUSEP")
-    content = _modify(content, row=6, column=10, value="PAGA")  # abreviação não é reconhecida
+    status = COL["Status VGCF"]
+    content = _modify(_workbook(size=4), row=2, column=status, value="Pagamento Confirmado")
+    content = _modify(content, row=3, column=status, value="  pagamento   confirmado ")
+    content = _modify(content, row=4, column=status, value="Validacao SUSEP")
+    content = _modify(content, row=5, column=status, value="PAGA")  # abreviação não é reconhecida
     batch = _upload(client, content).json()
     detail = client.get(f"/api/imports/{batch['id']}").json()
     unknown = [i for i in detail["issues"] if i["code"] == "status_unknown"]
@@ -250,7 +301,7 @@ def _counts():
 def test_delete_batch_removes_only_its_applications(client, make_user):
     _admin(client, make_user)
     first = _upload(client, _workbook(size=10)).json()
-    other = build_cohort_workbook("DEMO T71", date(2026, 2, 10), first_id=6000, size=5, seed=7)
+    other = build_cohort_workbook("DEMO T71", date(2026, 2, 10), size=5, seed=7)
     _upload(client, other, "t71.xlsx")
     assert _counts()[0] == 15
 
@@ -265,27 +316,23 @@ def test_delete_duplicate_restores_previous_data(client, make_user):
     _admin(client, make_user)
     content = _workbook(size=5)
     _upload(client, content)
-    original = _status_of("5000")
+    original = _first_app(content).status_raw
     wrong_status = "Entrevista" if original != "Entrevista" else "Validação SUSEP"
     # A mesma turma enviada de novo, com um status diferente para o primeiro candidato.
-    duplicate = _upload(client, _modify(content, row=3, column=10, value=wrong_status), "duplicada.xlsx").json()
-    assert _status_of("5000") == wrong_status
+    changed = _modify(content, row=FIRST, column=COL["Status VGCF"], value=wrong_status)
+    duplicate = _upload(client, changed, "duplicada.xlsx").json()
+    assert _first_app(content).status_raw == wrong_status
 
     result = client.delete(f"/api/imports/{duplicate['id']}").json()
     assert result == {"applications_removed": 0, "applications_restored": 1, "candidates_removed": 0}
-    assert _status_of("5000") == original
+    app = _first_app(content)
+    assert app.status_raw == original
     assert _counts()[0] == 5
     with get_sessionmaker()() as db:
-        app = db.scalar(select(Application).where(Application.external_record_id == "5000"))
         history = db.scalar(
             select(func.count()).where(ApplicationStatusHistory.application_id == app.id)
         )
         assert history == 1  # a mudança trazida pela planilha excluída some do histórico
-
-
-def _status_of(record_id: str) -> str:
-    with get_sessionmaker()() as db:
-        return db.scalar(select(Application.status_raw).where(Application.external_record_id == record_id))
 
 
 def test_viewer_cannot_delete_batch(client, make_user):
@@ -299,8 +346,7 @@ def test_viewer_cannot_delete_batch(client, make_user):
 def test_bulk_upload_processes_in_order(client, make_user):
     _admin(client, make_user)
     files = [
-        ("files", (f"t{n}.xlsx", build_cohort_workbook(f"DEMO T{n}", date(2026, 1, n), first_id=n * 100,
-                                                      size=3, seed=n), XLSX))
+        ("files", (f"t{n}.xlsx", build_cohort_workbook(f"DEMO T{n}", date(2026, 1, n), size=3, seed=n), XLSX))
         for n in range(1, 4)
     ]
     files.append(("files", ("t1-de-novo.xlsx", files[0][1][1], XLSX)))
@@ -322,3 +368,30 @@ def test_bulk_upload_limit(client, make_user):
     response = client.post("/api/imports/bulk", files=files)
     assert response.status_code == 422
     assert "20" in response.json()["detail"]
+
+
+def test_statuses_from_spreadsheets_can_be_deleted(client, make_user):
+    _admin(client, make_user)
+    content = _modify(_workbook(size=3), row=FIRST, column=COL["Status VGCF"], value="ENTRE")
+    content = _modify(content, row=FIRST + 1, column=COL["Status VGCF"], value="AGUA")
+    batch = _upload(client, content).json()
+
+    def statuses():
+        return {s["label"]: s for s in client.get("/api/admin/statuses").json()}
+
+    in_use = statuses()["ENTRE"]
+    response = client.delete(f"/api/admin/statuses/{in_use['id']}")
+    assert response.status_code == 409 and "candidatura" in response.json()["detail"]
+    official = statuses()["Entrevista"]
+    assert client.delete(f"/api/admin/statuses/{official['id']}").status_code == 409
+
+    client.delete(f"/api/imports/{batch['id']}")  # os status ficam sem uso
+    assert client.delete(f"/api/admin/statuses/{statuses()['AGUA']['id']}").status_code == 204
+    assert "AGUA" not in statuses()
+    assert client.post("/api/admin/statuses/cleanup").json() == {"deleted": 1}
+    remaining = statuses()
+    assert "ENTRE" not in remaining and len(remaining) == 9
+
+    # Reimportar recria o status, sem classificação.
+    _upload(client, content, "de-novo.xlsx")
+    assert statuses()["ENTRE"]["outcome"] == "unmapped"

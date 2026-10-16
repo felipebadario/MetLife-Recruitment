@@ -14,6 +14,7 @@ import { PresentationPage } from "@/pages/PresentationPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { AuditPage } from "@/pages/admin/AuditPage";
 import { CatalogsPage } from "@/pages/admin/CatalogsPage";
+import { ImportTemplatePage } from "@/pages/admin/ImportTemplatePage";
 import { PlannedSection } from "@/pages/admin/PlannedSection";
 import { UsersPage } from "@/pages/admin/UsersPage";
 
@@ -100,6 +101,7 @@ const routes: RouteObject[] = [
               // Endereço antigo da importação, que agora tem menu próprio.
               { path: "importacoes", element: <Navigate to="/importacao" replace /> },
               { path: "catalogos", element: <CatalogsPage /> },
+              { path: "padrao-planilha", element: <ImportTemplatePage /> },
               {
                 path: "integracoes",
                 element: (

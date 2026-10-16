@@ -88,7 +88,7 @@ def test_unknown_outcome_rejected(client, make_user):
 
 def test_new_outcome_counts_in_dashboard(client, make_user):
     _admin(client, make_user)
-    content = build_cohort_workbook("DEMO T81", date(2026, 3, 10), first_id=8000, size=30, seed=5)
+    content = build_cohort_workbook("DEMO T81", date(2026, 3, 10), size=30, seed=5)
     client.post("/api/imports", files={"file": ("t81.xlsx", content, XLSX)})
     client.post("/api/admin/outcomes", json={"label": "Em treinamento", "color": "#7B5EA7"})
     data = client.get("/api/performance/dashboard").json()

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 
 from app.auth.deps import CurrentUser, DbSession, require_permission
 from app.auth.permissions import Permission
@@ -16,6 +16,7 @@ from app.importing.vgcf import VGCF_STATUSES
 from app.models import (
     UNMAPPED_OUTCOME,
     Application,
+    ApplicationStatusHistory,
     MetricDefinition,
     OutcomeCategory,
     ProcessStatus,
@@ -272,6 +273,71 @@ def update_status(
     else:
         db.commit()
     return next(s for s in list_statuses(user, db) if s.id == item.id)
+
+
+def _delete_statuses(db, statuses: list[ProcessStatus]) -> None:
+    ids = [s.id for s in statuses]
+    db.execute(delete(StatusMapping).where(StatusMapping.status_id.in_(ids)))
+    db.execute(
+        update(ApplicationStatusHistory).where(ApplicationStatusHistory.from_status_id.in_(ids)).values(from_status_id=None)
+    )
+    db.execute(
+        update(ApplicationStatusHistory).where(ApplicationStatusHistory.to_status_id.in_(ids)).values(to_status_id=None)
+    )
+    db.execute(delete(ProcessStatus).where(ProcessStatus.id.in_(ids)))
+    db.flush()
+
+
+def _unused(db):
+    """Status fora da lista oficial que nenhuma candidatura usa."""
+    used = select(Application.status_id).where(Application.status_id.is_not(None))
+    return select(ProcessStatus).where(ProcessStatus.code.notin_(OFFICIAL_CODES), ProcessStatus.id.notin_(used))
+
+
+@router.delete("/statuses/{status_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_status(status_id: int, request: Request, user: CatalogManager, db: DbSession) -> None:
+    """Exclui um status recebido das planilhas. Os da lista oficial VGCF e os em uso ficam."""
+    item = db.get(ProcessStatus, status_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Status não encontrado.")
+    if item.code in OFFICIAL_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Status da lista oficial VGCF não pode ser excluído."
+        )
+    in_use = db.scalar(select(func.count()).where(Application.status_id == item.id)) or 0
+    if in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{in_use} candidatura{'s usam' if in_use > 1 else ' usa'} este status. "
+                "Exclua as planilhas que o trouxeram antes de excluir o status."
+            ),
+        )
+    details = {"code": item.code, "label": item.label}
+    _delete_statuses(db, [item])
+    record_audit(
+        db, action="catalog.status_deleted", request=request, actor=user,
+        entity_type="process_status", entity_id=status_id, details=details,
+    )
+
+
+class CleanupOut(BaseModel):
+    deleted: int
+
+
+@router.post("/statuses/cleanup", response_model=CleanupOut)
+def delete_unused_statuses(request: Request, user: CatalogManager, db: DbSession) -> CleanupOut:
+    """Exclui de uma vez os status fora da lista oficial sem nenhuma candidatura."""
+    statuses = list(db.scalars(_unused(db)))
+    if not statuses:
+        return CleanupOut(deleted=0)
+    labels = [s.label for s in statuses]
+    _delete_statuses(db, statuses)
+    record_audit(
+        db, action="catalog.statuses_cleaned", request=request, actor=user,
+        entity_type="process_status", details={"deleted": labels},
+    )
+    return CleanupOut(deleted=len(labels))
 
 
 # ---------------------------------------------------------------- indicadores

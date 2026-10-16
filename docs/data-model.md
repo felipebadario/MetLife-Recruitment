@@ -23,7 +23,7 @@ integration_sources                                        (Microsoft Graph, sem
 ## Princípios
 
 - **Candidato ≠ candidatura.** O candidato é único (pelo CPF, via hash); cada candidatura guarda o perfil daquele processo e tem histórico próprio.
-- **Valor bruto e valor normalizado lado a lado.** Colunas `*_raw` guardam o valor da planilha; `*_norm` (ou chaves para catálogos) guardam a interpretação usada nos indicadores. A linha original inteira fica em `raw_payload` e em `import_rows`.
+- **Valor bruto e valor normalizado lado a lado.** Colunas `*_raw` guardam o valor da planilha; `*_norm` (ou chaves para catálogos) guardam a interpretação usada nos indicadores. A linha original inteira fica em `raw_payload` e em `import_rows` (com o CPF mascarado). O padrão de colunas lido na importação fica em `import_columns` (Administração > Padrão da planilha).
 - **Nada é inferido.** Valor sem mapeamento é classificado como "não mapeado" até que um administrador o classifique.
 - **Dados de demonstração identificados.** `is_demo` em agências, candidatos e candidaturas; o ambiente de demonstração exibe uma faixa permanente.
 

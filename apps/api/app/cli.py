@@ -119,9 +119,7 @@ def _demo_spreadsheet(path: str) -> None:
 
     from app.importing.demo import build_cohort_workbook
 
-    content = build_cohort_workbook(
-        "DEMO T99", date.today() + timedelta(days=20), first_id=900000, size=60, seed=99
-    )
+    content = build_cohort_workbook("DEMO T99", date.today() + timedelta(days=20), size=60, seed=99)
     with open(path, "wb") as fh:
         fh.write(content)
     print(f"• Planilha fictícia gravada em {path}")

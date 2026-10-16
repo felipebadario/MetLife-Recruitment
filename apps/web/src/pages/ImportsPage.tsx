@@ -71,7 +71,7 @@ function UploadZone() {
     <Panel>
       <PanelHeader
         title="Importar planilhas das turmas"
-        description="Arquivos .xlsx no modelo da turma: título com a turma e a data da prova, seguido do cabeçalho com ID, Agência, Nome, Status VGCF e demais colunas."
+        description="Arquivos .xlsx no padrão da planilha da turma (Turma, CPF Candidato, Candidato, Nome Agência, Status VGCF e demais colunas). O padrão é definido em Administração > Padrão da planilha."
         actions={
           <Button
             variant="secondary"

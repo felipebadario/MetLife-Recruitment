@@ -21,6 +21,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     Time,
@@ -63,6 +64,7 @@ class Application(TimestampMixin, Base):
     exam_date: Mapped[date | None] = mapped_column(Date, index=True)
 
     # ORIGEM
+    agency_branch_raw: Mapped[str | None] = mapped_column(String(100))  # coluna "Agência" (código)
     regional_raw: Mapped[str | None] = mapped_column(String(200))
     regional_norm: Mapped[str | None] = mapped_column(String(160), index=True)
     sub_representative_raw: Mapped[str | None] = mapped_column(String(200))
@@ -93,6 +95,11 @@ class Application(TimestampMixin, Base):
     evaluation_date: Mapped[date | None] = mapped_column(Date)
     evaluation_time: Mapped[time | None] = mapped_column(Time)
     status_raw: Mapped[str | None] = mapped_column(String(200))
+    status_ens_raw: Mapped[str | None] = mapped_column(String(200))
+    status_final_raw: Mapped[str | None] = mapped_column(String(200))
+    executive_raw: Mapped[str | None] = mapped_column(String(200))
+    suspended_raw: Mapped[str | None] = mapped_column(String(50))
+    exams_count: Mapped[int | None] = mapped_column(Integer)
     status_id: Mapped[int | None] = mapped_column(
         ForeignKey("process_statuses.id", ondelete="SET NULL")
     )

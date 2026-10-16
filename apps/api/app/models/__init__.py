@@ -13,6 +13,7 @@ from app.models.candidate import Candidate
 from app.models.catalog import (
     UNMAPPED_OUTCOME,
     FunnelStage,
+    ImportColumn,
     LossReason,
     LossReasonMapping,
     MetricDefinition,
@@ -44,6 +45,7 @@ __all__ = [
     "ChangeSource",
     "FunnelStage",
     "ImportBatch",
+    "ImportColumn",
     "ImportIssue",
     "ImportRow",
     "ImportSource",
