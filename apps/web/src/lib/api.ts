@@ -75,17 +75,73 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return payload as T;
 }
 
+/** Envia um arquivo (multipart). */
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+    body: form,
+  }).catch(() => {
+    throw new ApiError(0, messageFrom(0, null));
+  });
+  const payload: unknown = (response.headers.get("content-type") ?? "").includes("application/json")
+    ? await response.json()
+    : null;
+  if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    throw new ApiError(response.status, messageFrom(response.status, payload), payload);
+  }
+  return payload as T;
+}
+
+/** Baixa um arquivo gerado pela API e entrega ao navegador para salvar. */
+async function download(path: string, fallbackName: string): Promise<void> {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+  }).catch(() => {
+    throw new ApiError(0, messageFrom(0, null));
+  });
+  if (!response.ok) {
+    const payload: unknown = (response.headers.get("content-type") ?? "").includes("application/json")
+      ? await response.json()
+      : null;
+    throw new ApiError(response.status, messageFrom(response.status, payload), payload);
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const name = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
+  upload,
+  download,
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
 };
 
-export function withQuery(path: string, params: Record<string, string | number | null | undefined>) {
+type QueryValue = string | number | null | undefined | (string | number)[];
+
+export function withQuery(path: string, params: Record<string, QueryValue>) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== "") search.set(key, String(value));
+    if (Array.isArray(value)) {
+      for (const item of value) search.append(key, String(item));
+    } else if (value !== null && value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
   }
   const qs = search.toString();
   return qs ? `${path}?${qs}` : path;
