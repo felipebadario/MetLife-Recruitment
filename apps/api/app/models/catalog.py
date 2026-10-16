@@ -13,14 +13,16 @@ import enum
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, JSONType, TimestampMixin, str_enum
+from app.db.base import Base, JSONType, TimestampMixin
 
 
 class ProcessOutcome(str, enum.Enum):
-    """Categorias de resultado usadas pelos indicadores (seções 5.1 e 7.1 do briefing).
+    """Códigos das classificações que vêm cadastradas (seções 5.1 e 7.1 do briefing).
 
-    Quais status da planilha pertencem a cada categoria é uma regra de negócio
-    pendente de validação — ver docs/pending-validations.md.
+    As classificações em si ficam na tabela `outcome_categories` e o administrador pode
+    criar, renomear e excluir. Só "unmapped" (não classificado) é fixa: é o estado inicial
+    de todo status. Quais status pertencem a cada classificação é regra de negócio pendente
+    de validação — ver docs/pending-validations.md.
     """
 
     IN_PROGRESS = "in_progress"
@@ -29,6 +31,24 @@ class ProcessOutcome(str, enum.Enum):
     HIRED = "hired"
     WITHDRAWN = "withdrawn"
     UNMAPPED = "unmapped"
+
+
+UNMAPPED_OUTCOME = ProcessOutcome.UNMAPPED.value
+
+
+class OutcomeCategory(TimestampMixin, Base):
+    """Classificação de resultado (ex.: Aprovado, Contratado), mantida pelo administrador."""
+
+    __tablename__ = "outcome_categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Código estável: é o que os status e as fórmulas dos indicadores guardam.
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    label: Mapped[str] = mapped_column(String(60))
+    color: Mapped[str] = mapped_column(String(7))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    # Classificação do sistema ("não classificado"): não pode ser excluída.
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class FunnelStage(TimestampMixin, Base):
@@ -52,9 +72,8 @@ class ProcessStatus(TimestampMixin, Base):
     label: Mapped[str] = mapped_column(String(120))
     # Rótulo curto opcional, só para exibição. Não é usado para reconhecer valores da planilha.
     abbreviation: Mapped[str | None] = mapped_column(String(32))
-    outcome: Mapped[ProcessOutcome] = mapped_column(
-        str_enum(ProcessOutcome), default=ProcessOutcome.UNMAPPED
-    )
+    # Código de uma classificação (outcome_categories.code).
+    outcome: Mapped[str] = mapped_column(String(32), default=UNMAPPED_OUTCOME)
     funnel_stage_id: Mapped[int | None] = mapped_column(
         ForeignKey("funnel_stages.id", ondelete="SET NULL")
     )

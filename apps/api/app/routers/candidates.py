@@ -18,6 +18,7 @@ from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
 from app.core.security import utcnow
 from app.models import (
+    UNMAPPED_OUTCOME,
     Agency,
     Application,
     ApplicationFieldChange,
@@ -25,7 +26,6 @@ from app.models import (
     Candidate,
     ImportBatch,
     InternalNote,
-    ProcessOutcome,
     ProcessStatus,
     SavedFilter,
     User,
@@ -33,6 +33,7 @@ from app.models import (
 from app.schemas import Page
 from app.services.audit import record_audit
 from app.services.filters import OUTCOME_EXPR, ApplicationFilters, application_filters
+from app.services.outcomes import outcome_codes, outcome_labels
 
 router = APIRouter(prefix="/api", tags=["candidates"])
 
@@ -56,7 +57,7 @@ SORTS = {
 class StatusRef(BaseModel):
     id: int | None
     label: str | None
-    outcome: ProcessOutcome
+    outcome: str
 
 
 class ApplicationRow(BaseModel):
@@ -111,7 +112,7 @@ def _row(app: Application, cand: Candidate, agency: Agency, st: ProcessStatus | 
         status=StatusRef(
             id=st.id if st else None,
             label=st.label if st else app.status_raw,
-            outcome=st.outcome if st else ProcessOutcome.UNMAPPED,
+            outcome=st.outcome if st else UNMAPPED_OUTCOME,
         ),
         susep_active=app.susep_active_raw,
         susep_number=app.susep_number,
@@ -158,12 +159,11 @@ def summary(_: Viewer, db: DbSession, filters: Filters) -> Summary:
             func.count(Application.id), func.count(distinct(Application.candidate_id))
         )
     ).one()
-    by_outcome = {o.value: 0 for o in ProcessOutcome}
+    by_outcome = {o: 0 for o in outcome_codes(db)}
     for outcome, count in db.execute(
         base.with_only_columns(OUTCOME_EXPR, func.count(Application.id)).group_by(OUTCOME_EXPR)
     ):
-        key = outcome.value if isinstance(outcome, ProcessOutcome) else str(outcome)
-        by_outcome[key] = count
+        by_outcome[str(outcome)] = count
     return Summary(applications=totals[0], candidates=totals[1], by_outcome=by_outcome)
 
 
@@ -216,7 +216,7 @@ def filter_options(_: Viewer, db: DbSession) -> dict:
         "regionals": distinct_values(Application.regional_norm),
         "sub_representatives": list(reps.values()),
         "statuses": [
-            {"id": i, "label": label, "outcome": o.value if o else "unmapped", "count": c}
+            {"id": i, "label": label, "outcome": o or UNMAPPED_OUTCOME, "count": c}
             for i, label, o, c in statuses
         ],
         "cohorts": [
@@ -353,14 +353,6 @@ def add_note(application_id: int, payload: NoteIn, request: Request, user: NoteW
 
 # ---------------------------------------------------------------- exportação
 EXPORT_LIMIT = 50_000
-OUTCOME_LABELS = {
-    "in_progress": "Em andamento",
-    "approved": "Aprovado",
-    "rejected": "Reprovado",
-    "hired": "Contratado",
-    "withdrawn": "Desistência",
-    "unmapped": "Não classificado",
-}
 
 
 @router.get("/candidates/export")
@@ -377,6 +369,7 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
         "Programa Relacionamento",
     ]
     ws.append(header)
+    labels = outcome_labels(db)
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="0061A0")
@@ -393,7 +386,7 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
                 row.exam_date,
                 row.registered_at.replace(tzinfo=None) if row.registered_at else None,
                 row.status_raw,
-                OUTCOME_LABELS[row.status.outcome.value],
+                labels.get(row.status.outcome, row.status.outcome),
                 row.susep_active,
                 row.susep_number,
                 row.relationship_program,

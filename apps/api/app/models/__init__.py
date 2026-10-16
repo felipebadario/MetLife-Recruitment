@@ -11,10 +11,12 @@ from app.models.application import (
 from app.models.audit import AuditLog
 from app.models.candidate import Candidate
 from app.models.catalog import (
+    UNMAPPED_OUTCOME,
     FunnelStage,
     LossReason,
     LossReasonMapping,
     MetricDefinition,
+    OutcomeCategory,
     ProcessOutcome,
     ProcessStatus,
     StatusMapping,
@@ -53,11 +55,13 @@ __all__ = [
     "LossReason",
     "LossReasonMapping",
     "MetricDefinition",
+    "OutcomeCategory",
     "ProcessOutcome",
     "ProcessStatus",
     "RowOutcome",
     "SavedFilter",
     "StatusMapping",
+    "UNMAPPED_OUTCOME",
     "User",
     "UserRole",
     "ValueMapping",

@@ -36,6 +36,7 @@ from app.importing.template import (
     parse_workbook,
 )
 from app.models import (
+    UNMAPPED_OUTCOME,
     Agency,
     Application,
     ApplicationFieldChange,
@@ -48,7 +49,6 @@ from app.models import (
     ImportSource,
     ImportStatus,
     IssueSeverity,
-    ProcessOutcome,
     ProcessStatus,
     RowOutcome,
     StatusMapping,
@@ -289,7 +289,7 @@ def get_or_create_status(db: Session, raw: str, cache: dict | None = None) -> Pr
             status = ProcessStatus(
                 code=code,
                 label=label,
-                outcome=ProcessOutcome.UNMAPPED,
+                outcome=UNMAPPED_OUTCOME,
                 position=position,
                 is_active=True,
                 is_provisional=True,

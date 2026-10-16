@@ -12,10 +12,10 @@ from app.db.session import get_sessionmaker
 from app.importing.demo import HEADER, build_cohort_workbook
 from app.importing.template import parse_title, parse_workbook
 from app.models import (
+    UNMAPPED_OUTCOME,
     Application,
     ApplicationStatusHistory,
     Candidate,
-    ProcessOutcome,
     ProcessStatus,
     UserRole,
 )
@@ -73,7 +73,7 @@ def test_import_creates_records_and_unmapped_statuses(client, make_user):
         assert db.scalar(select(func.count()).select_from(Application)) == 20
         statuses = list(db.scalars(select(ProcessStatus)))
         # Nenhum status é interpretado automaticamente.
-        assert statuses and all(s.outcome == ProcessOutcome.UNMAPPED for s in statuses)
+        assert statuses and all(s.outcome == UNMAPPED_OUTCOME for s in statuses)
 
 
 def test_same_file_twice_is_skipped(client, make_user):
