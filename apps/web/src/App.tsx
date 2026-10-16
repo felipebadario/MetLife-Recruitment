@@ -6,6 +6,7 @@ import { FullScreenLoader, RequireAuth, RequirePermission } from "@/auth/guards"
 import { AppShell, type RouteHandle } from "@/components/layout/AppShell";
 import { PREVIEW } from "@/lib/preview";
 import { CandidatesPage } from "@/pages/CandidatesPage";
+import { ImportsPage } from "@/pages/ImportsPage";
 import { NotFoundPage } from "@/pages/ForbiddenPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PerformancePage } from "@/pages/PerformancePage";
@@ -13,7 +14,6 @@ import { PresentationPage } from "@/pages/PresentationPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { AuditPage } from "@/pages/admin/AuditPage";
 import { CatalogsPage } from "@/pages/admin/CatalogsPage";
-import { ImportsPage } from "@/pages/admin/ImportsPage";
 import { PlannedSection } from "@/pages/admin/PlannedSection";
 import { UsersPage } from "@/pages/admin/UsersPage";
 
@@ -77,6 +77,15 @@ const routes: RouteObject[] = [
             ),
           },
           {
+            path: "importacao",
+            handle: handle("Importação"),
+            element: (
+              <RequirePermission permission="imports.manage">
+                <ImportsPage />
+              </RequirePermission>
+            ),
+          },
+          {
             path: "administracao",
             handle: handle("Administração"),
             element: (
@@ -88,7 +97,8 @@ const routes: RouteObject[] = [
               { index: true, element: <Navigate to="usuarios" replace /> },
               { path: "usuarios", element: <UsersPage /> },
               { path: "auditoria", element: <AuditPage /> },
-              { path: "importacoes", element: <ImportsPage /> },
+              // Endereço antigo da importação, que agora tem menu próprio.
+              { path: "importacoes", element: <Navigate to="/importacao" replace /> },
               { path: "catalogos", element: <CatalogsPage /> },
               {
                 path: "integracoes",

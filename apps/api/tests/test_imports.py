@@ -171,6 +171,17 @@ def test_viewer_cannot_import(client, make_user):
     assert _upload(client, _workbook()).status_code == 403
 
 
+def test_operational_can_import_but_not_reset(client, make_user):
+    make_user("op@example.com", UserRole.OPERATIONAL)
+    login(client, "op@example.com")
+    batch = _upload(client, _workbook(size=5)).json()
+    assert client.get(f"/api/imports/{batch['id']}").json()["batch"]["status"] == "completed"
+    assert client.get("/api/imports/sample").status_code == 200
+    assert client.post(f"/api/imports/{batch['id']}/reprocess").status_code == 202
+    assert client.delete(f"/api/imports/{batch['id']}").status_code == 200
+    assert client.post("/api/imports/reset", json={"confirmation": "APAGAR"}).status_code == 403
+
+
 def test_reset_requires_confirmation(client, make_user):
     _admin(client, make_user)
     _upload(client, _workbook())

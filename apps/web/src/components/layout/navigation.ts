@@ -1,4 +1,4 @@
-import { BarChart3, Settings2, UsersRound, type LucideIcon } from "lucide-react";
+import { BarChart3, FileUp, Settings2, UsersRound, type LucideIcon } from "lucide-react";
 
 import type { Permission } from "@/lib/types";
 
@@ -26,9 +26,16 @@ export const NAV_ITEMS: NavItem[] = [
     permission: "performance.view",
   },
   {
+    to: "/importacao",
+    label: "Importação",
+    description: "Envio das planilhas de turma e histórico de importações",
+    icon: FileUp,
+    permission: "imports.manage",
+  },
+  {
     to: "/administracao",
     label: "Administração",
-    description: "Usuários, importações e configurações",
+    description: "Usuários, status, integrações e auditoria",
     icon: Settings2,
     permission: "users.manage",
   },
