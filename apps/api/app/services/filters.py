@@ -24,6 +24,7 @@ class ApplicationFilters:
     search: str | None = None
     agency_ids: list[int] = field(default_factory=list)
     regionals: list[str] = field(default_factory=list)
+    sub_representatives: list[str] = field(default_factory=list)
     status_ids: list[int] = field(default_factory=list)
     outcomes: list[ProcessOutcome] = field(default_factory=list)
     cohorts: list[str] = field(default_factory=list)
@@ -55,6 +56,8 @@ class ApplicationFilters:
             query = query.where(Application.agency_id.in_(self.agency_ids))
         if self.regionals:
             query = query.where(Application.regional_norm.in_(self.regionals))
+        if self.sub_representatives:
+            query = query.where(Application.sub_representative_norm.in_(self.sub_representatives))
         if self.status_ids:
             query = query.where(Application.status_id.in_(self.status_ids))
         if self.outcomes:
@@ -76,6 +79,7 @@ def application_filters(
     search: Annotated[str | None, Query(max_length=120)] = None,
     agency_id: Annotated[list[int] | None, Query()] = None,
     regional: Annotated[list[str] | None, Query()] = None,
+    sub_representative: Annotated[list[str] | None, Query()] = None,
     status_id: Annotated[list[int] | None, Query()] = None,
     outcome: Annotated[list[ProcessOutcome] | None, Query()] = None,
     cohort: Annotated[list[str] | None, Query()] = None,
@@ -88,6 +92,7 @@ def application_filters(
         search=search or None,
         agency_ids=agency_id or [],
         regionals=regional or [],
+        sub_representatives=sub_representative or [],
         status_ids=status_id or [],
         outcomes=outcome or [],
         cohorts=cohort or [],

@@ -9,6 +9,7 @@ import { CandidatesPage } from "@/pages/CandidatesPage";
 import { NotFoundPage } from "@/pages/ForbiddenPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PerformancePage } from "@/pages/PerformancePage";
+import { PresentationPage } from "@/pages/PresentationPage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { AuditPage } from "@/pages/admin/AuditPage";
 import { CatalogsPage } from "@/pages/admin/CatalogsPage";
@@ -38,6 +39,17 @@ const routes: RouteObject[] = [
     element: <Root />,
     children: [
       { path: "/login", element: <LoginPage /> },
+      {
+        // Apresentação para exportar em PDF: tela cheia, sem o menu lateral.
+        path: "/performance/apresentacao",
+        element: (
+          <RequireAuth>
+            <RequirePermission permission="performance.view">
+              <PresentationPage />
+            </RequirePermission>
+          </RequireAuth>
+        ),
+      },
       {
         element: (
           <RequireAuth>

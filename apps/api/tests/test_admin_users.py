@@ -71,3 +71,37 @@ def test_reset_password_ends_sessions(client, make_user):
         )
         assert response.status_code == 204
         assert other.get("/api/auth/me").status_code == 401
+
+
+def test_admin_edits_user_email(client, make_user):
+    _admin(client, make_user)
+    other = make_user("antigo@example.com", UserRole.VIEWER)
+    response = client.patch(f"/api/admin/users/{other.id}", json={"email": "Novo@Example.com"})
+    assert response.status_code == 200 and response.json()["email"] == "novo@example.com"
+    assert login(client, "antigo@example.com").status_code == 401
+    assert login(client, "novo@example.com").status_code == 200
+
+
+def test_email_edit_conflict_and_validation(client, make_user):
+    _admin(client, make_user)
+    other = make_user("outro@example.com", UserRole.VIEWER)
+    assert client.patch(f"/api/admin/users/{other.id}", json={"email": "admin@example.com"}).status_code == 409
+    assert client.patch(f"/api/admin/users/{other.id}", json={"email": "sem-arroba"}).status_code == 422
+
+
+def test_cannot_demote_last_admin_to_operational(client, make_user):
+    admin = _admin(client, make_user)
+    assert client.patch(f"/api/admin/users/{admin.id}", json={"role": "operational"}).status_code == 400
+
+
+def test_operational_sees_everything_but_admin(client, make_user):
+    make_user("op@example.com", UserRole.OPERATIONAL)
+    response = login(client, "op@example.com")
+    assert set(response.json()["permissions"]) == {
+        "candidates.view", "candidates.view_sensitive", "candidates.export", "candidates.notes_write",
+        "performance.view",
+    }
+    assert client.get("/api/performance/dashboard").status_code == 200
+    assert client.get("/api/candidates").status_code == 200
+    for path in ("/api/admin/users", "/api/admin/statuses", "/api/imports", "/api/admin/audit-logs"):
+        assert client.get(path).status_code == 403, path

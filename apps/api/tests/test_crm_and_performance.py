@@ -136,3 +136,18 @@ def test_viewer_permissions(client, make_user):
     assert client.post(f"/api/applications/{app_id}/notes", json={"body": "x"}).status_code == 403
     assert client.get("/api/performance/dashboard").status_code == 403
     assert client.get("/api/admin/statuses").status_code == 403
+
+
+def test_dashboard_by_representative(client, make_user):
+    _seed(client, make_user)
+    data = client.get("/api/performance/dashboard").json()
+    reps = data["representatives"]
+    assert reps and sum(r["total"] for r in reps) == 40
+    assert all({"agency_id", "agency_name", "name", "by_outcome", "rates"} <= set(r) for r in reps)
+    assert sum(r["count"] for r in data["representative_status"]) == 40
+
+    options = client.get("/api/candidates/options").json()
+    rep = options["sub_representatives"][0]
+    filtered = client.get("/api/performance/dashboard", params={"sub_representative": rep["value"]}).json()
+    assert filtered["totals"]["applications"] == rep["count"]
+    assert {r["name"] for r in filtered["representatives"]} == {rep["value"]}

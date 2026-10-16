@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> None:
     create = sub.add_parser("create-user", help="Cria um usuário")
     create.add_argument("--name", required=True)
     create.add_argument("--email", required=True)
-    create.add_argument("--role", choices=["admin", "viewer"], default="viewer")
+    create.add_argument("--role", choices=["admin", "operational", "viewer"], default="viewer")
     seed = sub.add_parser("seed-demo", help="Importa turmas FICTÍCIAS de demonstração")
     seed.add_argument("--cohorts", type=int, default=8)
     sheet = sub.add_parser("demo-spreadsheet", help="Gera uma planilha FICTÍCIA no modelo da turma")

@@ -35,6 +35,13 @@ const ALL_PERMISSIONS: Permission[] = [
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   admin: ALL_PERMISSIONS,
+  operational: [
+    "candidates.export",
+    "candidates.notes_write",
+    "candidates.view",
+    "candidates.view_sensitive",
+    "performance.view",
+  ],
   viewer: ["candidates.view"],
 };
 
@@ -212,7 +219,7 @@ function route(method: string, path: string, query: URLSearchParams, data: Body)
       name,
       email,
       password: String(data.password),
-      role: data.role === "admin" ? "admin" : "viewer",
+      role: data.role === "admin" || data.role === "operational" ? data.role : "viewer",
       is_active: true,
       last_login_at: null,
       created_at: new Date().toISOString(),
@@ -242,11 +249,17 @@ function route(method: string, path: string, query: URLSearchParams, data: Body)
     if (method === "PATCH" && !userMatch[2]) {
       const activeAdmins = state.users.filter((u) => u.role === "admin" && u.is_active).length;
       const losingAdmin =
-        user.role === "admin" && user.is_active && (data.role === "viewer" || data.is_active === false);
+        user.role === "admin" && user.is_active && ((data.role !== undefined && data.role !== "admin") || data.is_active === false);
       if (losingAdmin && activeAdmins <= 1) fail(400, "É preciso manter pelo menos um administrador ativo.");
       if (user.id === actor.id && data.is_active === false) fail(400, "Você não pode desativar o próprio acesso.");
+      if (data.email !== undefined) {
+        const email = String(data.email).trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail(422, "E-mail inválido.");
+        if (state.users.some((u) => u.email === email && u.id !== user.id)) fail(409, "Já existe um usuário com este e-mail.");
+        data.email = email;
+      }
       const applied: Record<string, unknown> = {};
-      for (const field of ["name", "role", "is_active"] as const) {
+      for (const field of ["name", "email", "role", "is_active"] as const) {
         if (data[field] !== undefined && data[field] !== user[field]) {
           (user as unknown as Record<string, unknown>)[field] = data[field];
           applied[field] = data[field];

@@ -159,6 +159,17 @@ export function FilterBar({
           options={(options?.regionals ?? []).map((r) => ({ value: r.value, label: r.value, count: r.count }))}
         />
         <MultiSelect
+          label="Representante"
+          selected={filters.sub_representative}
+          onChange={(sub_representative) => onChange({ sub_representative })}
+          options={(options?.sub_representatives ?? []).map((r) => ({
+            value: r.value,
+            label: r.value,
+            count: r.count,
+            hint: r.agencies.join(", "),
+          }))}
+        />
+        <MultiSelect
           label="Turma"
           selected={filters.cohort}
           onChange={(cohort) => onChange({ cohort })}

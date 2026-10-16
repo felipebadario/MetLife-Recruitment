@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "viewer";
+export type UserRole = "admin" | "operational" | "viewer";
 
 export type Permission =
   | "candidates.view"
@@ -55,6 +55,7 @@ export interface AuditLog {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Administrador",
+  operational: "Operacional",
   viewer: "Visualizador",
 };
 
@@ -101,6 +102,7 @@ export interface OptionValue {
 export interface FilterOptions {
   agencies: { id: number; name: string; count: number }[];
   regionals: OptionValue[];
+  sub_representatives: (OptionValue & { agencies: string[] })[];
   statuses: { id: number; label: string; outcome: Outcome; count: number }[];
   cohorts: (OptionValue & { exam_date: string | null })[];
   programs: OptionValue[];
@@ -245,6 +247,8 @@ export interface Dashboard {
   agencies: (GroupStats & { agency_id: number; name: string })[];
   statuses: { status_id: number | null; label: string; outcome: Outcome; count: number }[];
   agency_status: { agency_id: number; status_id: number | null; count: number }[];
+  representatives: (GroupStats & { agency_id: number; agency_name: string; name: string })[];
+  representative_status: { agency_id: number; name: string; status_id: number | null; count: number }[];
   timeline: (GroupStats & { period: string })[];
   cohorts: (GroupStats & { name: string; exam_date: string | null })[];
   profile: { key: string; label: string; groups: (GroupStats & { value: string; suppressed?: boolean })[] }[];

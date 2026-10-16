@@ -8,6 +8,7 @@ export interface Filters {
   search: string;
   agency_id: string[];
   regional: string[];
+  sub_representative: string[];
   status_id: string[];
   outcome: Outcome[];
   cohort: string[];
@@ -21,6 +22,7 @@ export const EMPTY_FILTERS: Filters = {
   search: "",
   agency_id: [],
   regional: [],
+  sub_representative: [],
   status_id: [],
   outcome: [],
   cohort: [],
@@ -30,7 +32,7 @@ export const EMPTY_FILTERS: Filters = {
   date_to: "",
 };
 
-const LIST_KEYS = ["agency_id", "regional", "status_id", "outcome", "cohort", "program", "susep_active"] as const;
+const LIST_KEYS = ["agency_id", "regional", "sub_representative", "status_id", "outcome", "cohort", "program", "susep_active"] as const;
 type ListKey = (typeof LIST_KEYS)[number];
 
 export function filtersFromSearch(params: URLSearchParams): Filters {
