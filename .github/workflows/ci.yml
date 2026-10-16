@@ -24,7 +24,14 @@ jobs:
         run: ruff check --output-format=github .
       - name: Testes
         if: success() || failure()
-        run: pytest -p no:cacheprovider -rA --tb=short
+        shell: bash
+        run: |
+          set +e
+          pytest -p no:cacheprovider -rfE --tb=line 2>&1 | tee pytest.out
+          status=${PIPESTATUS[0]}
+          # Falhas viram anotações visíveis na aba Checks do GitHub
+          grep -E "^(FAILED|ERROR)|^/.*Error|^E  " pytest.out | head -20 | sed 's/^/::error::/'
+          exit $status
       - name: Migrações aplicam do zero e batem com os modelos
         if: success() || failure()
         env:
