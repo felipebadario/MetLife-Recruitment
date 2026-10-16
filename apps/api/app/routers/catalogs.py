@@ -10,6 +10,7 @@ from sqlalchemy import func, select, update
 
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
+from app.importing.vgcf import VGCF_STATUSES
 from app.models import (
     Application,
     FunnelStage,
@@ -23,6 +24,8 @@ from app.services.audit import record_audit
 
 router = APIRouter(prefix="/api/admin", tags=["catalogs"])
 
+OFFICIAL_CODES = {item.code for item in VGCF_STATUSES}
+
 CatalogManager = Annotated[User, Depends(require_permission(Permission.CATALOGS_MANAGE))]
 
 
@@ -31,6 +34,8 @@ class StatusOut(BaseModel):
     id: int
     code: str
     label: str
+    abbreviation: str | None
+    is_official: bool
     outcome: ProcessOutcome
     funnel_stage_id: int | None
     is_provisional: bool
@@ -40,6 +45,7 @@ class StatusOut(BaseModel):
 
 class StatusUpdate(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=120)
+    abbreviation: str | None = Field(default=None, max_length=32)  # texto vazio apaga
     outcome: ProcessOutcome | None = None
     funnel_stage_id: int | None = None
     clear_funnel_stage: bool = False
@@ -59,6 +65,8 @@ def list_statuses(_: CatalogManager, db: DbSession) -> list[StatusOut]:
             id=s.id,
             code=s.code,
             label=s.label,
+            abbreviation=s.abbreviation,
+            is_official=s.code in OFFICIAL_CODES,
             outcome=s.outcome,
             funnel_stage_id=s.funnel_stage_id,
             is_provisional=s.is_provisional,
@@ -80,6 +88,11 @@ def update_status(
     if payload.label is not None and payload.label.strip() != item.label:
         item.label = payload.label.strip()
         changes["label"] = item.label
+    if payload.abbreviation is not None:
+        abbreviation = payload.abbreviation.strip() or None
+        if abbreviation != item.abbreviation:
+            item.abbreviation = abbreviation
+            changes["abbreviation"] = abbreviation
     if payload.outcome is not None and payload.outcome != item.outcome:
         item.outcome = payload.outcome
         changes["outcome"] = payload.outcome.value

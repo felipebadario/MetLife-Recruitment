@@ -4,7 +4,7 @@ O sistema **não inventa** regras de negócio. Cada item abaixo está modelado d
 
 | # | Pendência | Onde impacta | Como está hoje |
 |---|---|---|---|
-| 1 | **Significado de cada código de status** da planilha: PAGA, AGUA, REPRC, CANC, ENVIA, ENTRE (e futuros) | Todos os indicadores | Cada código entra como "não classificado". O administrador classifica em Administração > Status e catálogos (aprovado, reprovado, contratado, desistência, em andamento). Nada é presumido — inclusive "PAGA" não é tratado como contratação automaticamente |
+| 1 | **Significado de cada status VGCF**: Aguardando Pagamento, Enviado para MLPARCEIRO, Cancelado VGCF, Reprovado Entrevista, Pagamento Confirmado, Entrevista METLIFE, Solicitado Kit Ferramenta, Entrevista, Validação SUSEP | Todos os indicadores | A **lista** de status é oficial (a planilha traz o nome completo) e já vem cadastrada. O **significado** de cada um começa "não classificado"; o administrador classifica em Administração > Status e catálogos (aprovado, reprovado, contratado, desistência, em andamento). Nada é presumido — inclusive "Pagamento Confirmado" não é tratado como contratação automaticamente. Status fora da lista entra com aviso na importação |
 | 2 | Definição de **contratado** (pagamento confirmado ≠ contratação, conforme o briefing) | Indicadores, funil | Depende da classificação do item 1 |
 | 3 | Etapas reais do **funil** e a etapa de cada status | Funil | Seis etapas ilustrativas do briefing, marcadas como "Ilustrativa"; editáveis |
 | 4 | **Fórmulas das taxas** (numerador e denominador) | Indicadores | Provisório: classificações relevantes sobre o total de candidaturas classificadas. Editável e marcado "Provisória" até validação |

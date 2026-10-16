@@ -50,6 +50,8 @@ class ProcessStatus(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(64), unique=True)
     label: Mapped[str] = mapped_column(String(120))
+    # Rótulo curto opcional, só para exibição. Não é usado para reconhecer valores da planilha.
+    abbreviation: Mapped[str | None] = mapped_column(String(32))
     outcome: Mapped[ProcessOutcome] = mapped_column(
         str_enum(ProcessOutcome), default=ProcessOutcome.UNMAPPED
     )

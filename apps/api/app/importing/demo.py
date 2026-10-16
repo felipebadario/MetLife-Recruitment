@@ -24,7 +24,7 @@ HEADER = [
     "SUSEP Ativa?",
     "Número SUSEP",
     "Programa Relacionamento",
-    "Status",
+    "Status VGCF",
 ]
 
 DEMO_AGENCIES = [
@@ -49,10 +49,19 @@ LAST_NAMES = [
     "Valente", "Xavier", "Zanetti", "Moura", "Prado", "Rezende", "Sampaio", "Tavares", "Vieira",
 ]
 
-# Códigos de status no formato das planilhas. Sem interpretação aqui: a classificação
+# Status VGCF no formato das planilhas. Sem interpretação aqui: a classificação
 # (aprovado, reprovado, contratado...) é feita pelo administrador no sistema.
-FINAL_STATUS_WEIGHTS = {"PAGA": 44, "REPRC": 14, "CANC": 13, "AGUA": 17, "ENVIA": 6, "ENTRE": 6}
-RECENT_STATUS_WEIGHTS = {"AGUA": 45, "ENVIA": 18, "ENTRE": 15, "PAGA": 10, "CANC": 7, "REPRC": 5}
+FINAL_STATUS_WEIGHTS = {
+    "Pagamento Confirmado": 40, "Reprovado Entrevista": 14, "Cancelado VGCF": 13,
+    "Aguardando Pagamento": 12, "Solicitado Kit Ferramenta": 6, "Enviado para MLPARCEIRO": 5,
+    "Validação SUSEP": 4, "Entrevista METLIFE": 3, "Entrevista": 3,
+}
+RECENT_STATUS_WEIGHTS = {
+    "Entrevista": 20, "Entrevista METLIFE": 15, "Validação SUSEP": 12, "Enviado para MLPARCEIRO": 12,
+    "Aguardando Pagamento": 15, "Solicitado Kit Ferramenta": 6, "Pagamento Confirmado": 8,
+    "Cancelado VGCF": 6, "Reprovado Entrevista": 6,
+}
+PAID = "Pagamento Confirmado"
 
 # Eficiência diferente por agência, para que o ranking tenha o que mostrar.
 _AGENCY_SKEW = {name: 0.6 + (i * 37 % 23) / 23 * 0.9 for i, (name, _) in enumerate(DEMO_AGENCIES)}
@@ -66,7 +75,7 @@ def _person(rng: random.Random) -> str:
 
 def _status(rng: random.Random, agency: str, recent: bool) -> str:
     weights = dict(RECENT_STATUS_WEIGHTS if recent else FINAL_STATUS_WEIGHTS)
-    weights["PAGA"] = weights["PAGA"] * _AGENCY_SKEW[agency]
+    weights[PAID] = weights[PAID] * _AGENCY_SKEW[agency]
     codes = list(weights)
     return rng.choices(codes, weights=[weights[c] for c in codes])[0]
 
@@ -117,7 +126,7 @@ def build_cohort_workbook(
                 _status(rng, agency, recent),
             ]
         )
-    for column, width in zip("ABCDEFGHIJ", (8, 20, 16, 12, 28, 32, 12, 14, 22, 10), strict=True):
+    for column, width in zip("ABCDEFGHIJ", (8, 20, 16, 12, 28, 32, 12, 14, 22, 26), strict=True):
         ws.column_dimensions[column].width = width
 
     buffer = io.BytesIO()

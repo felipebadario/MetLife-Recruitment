@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from openpyxl import load_workbook
 
 from app.core.text import clean, normalize_key
+from app.importing import vgcf
 
 TEMPLATE_NAME = "turma-safee-v1"
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
@@ -62,7 +63,7 @@ COLUMNS: tuple[Column, ...] = (
         "Programa Relacionamento",
         ("programa relacionamento", "programa de relacionamento"),
     ),
-    Column("status", "Status", ("status",), required=True),
+    Column("status", "Status VGCF", ("status", "status vgcf"), required=True),
 )
 
 _HEADER_PUNCT = re.compile(r"[^a-z0-9 ]+")
@@ -284,6 +285,16 @@ def _parse_row(
     if not values["status"]:
         parsed.issues.append(
             Issue("status_empty", "Status não preenchido.", "status", severity="warning")
+        )
+    elif vgcf.lookup(values["status"]) is None:
+        parsed.issues.append(
+            Issue(
+                "status_unknown",
+                "Status fora da lista oficial VGCF. Confira a grafia ou cadastre o novo status.",
+                "status",
+                values["status"],
+                severity="warning",
+            )
         )
 
     registered = cell("site_registered_at")

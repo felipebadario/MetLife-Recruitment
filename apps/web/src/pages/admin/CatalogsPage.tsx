@@ -32,6 +32,7 @@ function errorText(error: unknown) {
 function StatusRow({ status, stages }: { status: CatalogStatus; stages: FunnelStage[] }) {
   const refresh = useRefreshAll();
   const [label, setLabel] = useState(status.label);
+  const [abbreviation, setAbbreviation] = useState(status.abbreviation ?? "");
   const update = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/api/admin/statuses/${status.id}`, body),
     onSuccess: refresh,
@@ -40,8 +41,13 @@ function StatusRow({ status, stages }: { status: CatalogStatus; stages: FunnelSt
   return (
     <tr className="align-top">
       <td className="px-5 py-3">
-        <p className="font-semibold text-ink">{status.raw_values.join(", ") || status.code}</p>
+        <p className="font-semibold text-ink">{status.raw_values.join(", ") || status.label}</p>
         <p className="tabular text-xs text-muted">{formatNumber(status.applications)} candidaturas</p>
+        {!status.is_official && (
+          <Badge tone="warning" className="mt-1">
+            Fora da lista VGCF
+          </Badge>
+        )}
       </td>
       <td className="px-5 py-3">
         <Input
@@ -50,6 +56,19 @@ function StatusRow({ status, stages }: { status: CatalogStatus; stages: FunnelSt
           onChange={(e) => setLabel(e.target.value)}
           onBlur={() => label.trim() && label !== status.label && update.mutate({ label })}
           className="h-9 min-w-40 text-[13px]"
+        />
+      </td>
+      <td className="px-5 py-3">
+        <Input
+          aria-label={`Abreviação de ${status.label}`}
+          value={abbreviation}
+          maxLength={32}
+          placeholder="Opcional"
+          onChange={(e) => setAbbreviation(e.target.value)}
+          onBlur={() =>
+            abbreviation.trim() !== (status.abbreviation ?? "") && update.mutate({ abbreviation: abbreviation.trim() })
+          }
+          className="h-9 w-28 text-[13px]"
         />
       </td>
       <td className="px-5 py-3">
@@ -277,7 +296,7 @@ export function CatalogsPage() {
       <Panel>
         <PanelHeader
           title="Classificação dos status"
-          description="Cada código que vem da planilha precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos códigos."
+          description="Cada status da coluna Status VGCF precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos status."
         />
         {unmapped > 0 && (
           <div className="px-5 pt-4">
@@ -305,11 +324,12 @@ export function CatalogsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-[13px]">
+            <table className="w-full min-w-[940px] text-left text-[13px]">
               <thead className="bg-surface/60 text-muted">
                 <tr>
-                  <th className="px-5 py-2.5 font-semibold">Código na planilha</th>
+                  <th className="px-5 py-2.5 font-semibold">Status VGCF na planilha</th>
                   <th className="px-5 py-2.5 font-semibold">Nome de exibição</th>
+                  <th className="px-5 py-2.5 font-semibold">Abreviação</th>
                   <th className="px-5 py-2.5 font-semibold">Classificação</th>
                   <th className="px-5 py-2.5 font-semibold">Etapa do funil</th>
                 </tr>

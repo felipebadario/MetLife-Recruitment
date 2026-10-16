@@ -54,8 +54,12 @@ def test_candidates_list_filters_sort_and_summary(client, make_user):
 
 def test_classifying_statuses_drives_rates(client, make_user):
     _seed(client, make_user)
-    _classify(client, {"PAGA": "hired", "REPRC": "rejected", "CANC": "withdrawn", "AGUA": "in_progress",
-                       "ENVIA": "in_progress", "ENTRE": "in_progress"})
+    _classify(client, {
+        "Pagamento Confirmado": "hired", "Reprovado Entrevista": "rejected", "Cancelado VGCF": "withdrawn",
+        "Aguardando Pagamento": "in_progress", "Enviado para MLPARCEIRO": "in_progress",
+        "Entrevista": "in_progress", "Entrevista METLIFE": "in_progress", "Validação SUSEP": "in_progress",
+        "Solicitado Kit Ferramenta": "in_progress",
+    })
     data = client.get("/api/performance/dashboard").json()
     assert data["totals"]["applications"] == 40
     assert data["totals"]["by_outcome"]["unmapped"] == 0
@@ -81,11 +85,11 @@ def test_funnel_uses_stage_positions(client, make_user):
     stages = client.get("/api/admin/funnel-stages").json()
     last = stages[-1]
     for status in client.get("/api/admin/statuses").json():
-        if status["label"] == "PAGA":
+        if status["label"] == "Pagamento Confirmado":
             client.patch(f"/api/admin/statuses/{status['id']}", json={"funnel_stage_id": last["id"]})
     data = client.get("/api/performance/dashboard").json()
     funnel = {f["label"]: f["count"] for f in data["funnel"]}
-    paga = next(s["count"] for s in data["statuses"] if s["label"] == "PAGA")
+    paga = next(s["count"] for s in data["statuses"] if s["label"] == "Pagamento Confirmado")
     assert funnel[last["label"]] == paga
     assert funnel[stages[0]["label"]] == paga  # quem chegou ao fim passou pelas etapas anteriores
 
