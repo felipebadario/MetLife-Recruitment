@@ -17,7 +17,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 def _seed(client, make_user, size: int = 40):
     make_user("admin@example.com", UserRole.ADMIN)
     login(client, "admin@example.com")
-    content = build_cohort_workbook("DEMO T80", date(2026, 3, 10), first_id=7000, size=size, seed=3)
+    content = build_cohort_workbook("DEMO T80", date(2026, 3, 10), size=size, seed=3)
     client.post("/api/imports", files={"file": ("t80.xlsx", content, XLSX)})
 
 
@@ -106,7 +106,9 @@ def test_detail_notes_and_export(client, make_user):
     detail = client.get(f"/api/applications/{app_id}").json()
     kinds = {e["kind"] for e in detail["timeline"]}
     assert {"created", "note"} <= kinds
-    assert detail["raw_payload"]["Agência"] == detail["application"]["agency_name"]
+    assert detail["raw_payload"]["Nome Agência"] == detail["application"]["agency_name"]
+    assert detail["raw_payload"]["CPF Candidato"].startswith("***.***.")
+    assert detail["application"]["cpf_masked"] == detail["raw_payload"]["CPF Candidato"]
 
     export = client.get("/api/candidates/export")
     assert export.status_code == 200

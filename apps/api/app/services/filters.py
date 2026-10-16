@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Annotated
@@ -9,6 +10,7 @@ from typing import Annotated
 from fastapi import Query
 from sqlalchemy import Select, func, literal_column, or_
 
+from app.core.crypto import cpf_hash, normalize_cpf
 from app.core.text import normalize_key
 from app.models import Application, Candidate, ProcessStatus
 
@@ -45,10 +47,12 @@ class ApplicationFilters:
         if self.search:
             term = self.search.strip()
             key = f"%{normalize_key(term)}%"
+            conditions = [Candidate.name_search.like(key), Application.external_record_id == term]
+            if len(re.sub(r"\D", "", term)) == 11:
+                conditions.append(Candidate.cpf_hash == cpf_hash(normalize_cpf(term) or ""))
             query = query.where(
                 or_(
-                    Candidate.name_search.like(key),
-                    Application.external_record_id == term,
+                    *conditions,
                     func.lower(Application.sub_representative_raw).like(f"%{term.lower()}%"),
                 )
             )

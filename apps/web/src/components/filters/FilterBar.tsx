@@ -116,7 +116,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (value: strin
       <Input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder="Buscar por nome, ID ou sub-representante"
+        placeholder="Buscar por nome, CPF ou representante"
         aria-label="Buscar candidatos"
         className="h-9 pl-9 text-[13px]"
       />
@@ -198,18 +198,23 @@ export function FilterBar({
           onChange={(outcome) => onChange({ outcome })}
           options={outcomes}
         />
-        <MultiSelect
-          label="SUSEP ativa"
-          selected={filters.susep_active}
-          onChange={(susep_active) => onChange({ susep_active })}
-          options={(options?.susep_active ?? []).map((r) => ({ value: r.value, label: r.value, count: r.count }))}
-        />
-        <MultiSelect
-          label="Programa"
-          selected={filters.program}
-          onChange={(program) => onChange({ program })}
-          options={(options?.programs ?? []).map((r) => ({ value: r.value, label: r.value, count: r.count }))}
-        />
+        {/* Colunas do modelo anterior: o filtro só aparece quando há dados. */}
+        {(options?.susep_active.length || filters.susep_active.length) ? (
+          <MultiSelect
+            label="SUSEP ativa"
+            selected={filters.susep_active}
+            onChange={(susep_active) => onChange({ susep_active })}
+            options={(options?.susep_active ?? []).map((r) => ({ value: r.value, label: r.value, count: r.count }))}
+          />
+        ) : null}
+        {(options?.programs.length || filters.program.length) ? (
+          <MultiSelect
+            label="Programa"
+            selected={filters.program}
+            onChange={(program) => onChange({ program })}
+            options={(options?.programs ?? []).map((r) => ({ value: r.value, label: r.value, count: r.count }))}
+          />
+        ) : null}
         <div className="flex items-center gap-1.5 text-[13px] text-muted">
           <label htmlFor="date-from">Cadastro de</label>
           <Input

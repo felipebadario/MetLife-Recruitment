@@ -3,12 +3,13 @@
 Regras (ver docs/pending-validations.md para o que ainda depende do negócio):
 - Idempotência por arquivo: o mesmo conteúdo (SHA-256) já importado com sucesso não é
   processado de novo, a não ser por reprocessamento explícito.
-- Idempotência por linha: a candidatura é localizada pelo ID da planilha; se nada mudou
-  (mesmo hash da linha), não há alteração nem histórico novo.
+- Idempotência por linha: a candidatura é localizada pelo ID da planilha, quando o padrão lê
+  essa coluna; senão, pelo candidato (CPF ou, sem CPF, nome) + turma. Se nada mudou (mesmo
+  hash da linha), não há alteração nem histórico novo.
 - Mudança de status gera entrada no histórico de status; mudança de outros campos gera
   registro campo a campo.
-- Candidato sem CPF no modelo atual: é identificado pelo nome normalizado. Pendente de
-  validação (homônimos seriam unidos).
+- Candidato: identificado pelo CPF (guardado só como hash, criptografado e mascarado). Sem
+  CPF, pelo nome normalizado. Pendente de validação (homônimos sem CPF seriam unidos).
 - Status VGCF: o valor da planilha é ligado ao status oficial de mesmo nome (ou abreviação
   conhecida, ver app/importing/vgcf.py). Valor fora da lista vira um status próprio, com aviso
   na importação. Em ambos os casos o significado (aprovado, contratado...) começa "não
@@ -24,12 +25,13 @@ from dataclasses import dataclass, field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.crypto import cpf_hash, encrypt_value, format_cpf, mask_cpf
 from app.core.security import utcnow
 from app.core.text import clean, normalize_key, slug
 from app.importing import vgcf
+from app.importing.columns import load_columns, signature
 from app.importing.template import (
     LOCAL_TZ,
-    TEMPLATE_NAME,
     ParsedRow,
     ParsedSheet,
     TemplateError,
@@ -61,8 +63,15 @@ MAX_FILE_BYTES = 10 * 1024 * 1024
 # Campos da candidatura acompanhados no histórico, com o rótulo exibido na interface.
 TRACKED_FIELDS: dict[str, str] = {
     "agency_id": "Agência",
+    "agency_branch_raw": "Código da agência",
     "regional_raw": "Regional",
-    "sub_representative_raw": "Sub-representante",
+    "sub_representative_raw": "Representante (R.N)",
+    "executive_raw": "Executivo",
+    "suspended_raw": "Suspenso",
+    "exams_count": "Provas",
+    "status_ens_raw": "Status ENS",
+    "status_final_raw": "Status final",
+    "evaluation_date": "Data de avaliação",
     "susep_active_raw": "SUSEP ativa",
     "susep_number": "Número SUSEP",
     "relationship_program_raw": "Programa de relacionamento",
@@ -95,7 +104,7 @@ def create_batch(
         file_sha256=digest,
         file_size=len(content),
         file_content=content,
-        template_version=TEMPLATE_NAME,
+        template_version=signature(load_columns(db)),
         triggered_by_id=user.id if user else None,
         reprocess_of_id=reprocess_of.id if reprocess_of else None,
         rows_total=0,
@@ -149,7 +158,9 @@ def process_batch(db: Session, batch_id: int) -> ImportBatch:
 
     try:
         content = batch.file_content or b""
-        sheet = parse_workbook(content)
+        columns = load_columns(db)
+        batch.template_version = signature(columns)
+        sheet = parse_workbook(content, columns)
     except TemplateError as exc:
         _fail(db, batch, str(exc), code="template")
         return batch
@@ -183,13 +194,24 @@ def _apply_sheet(db: Session, batch: ImportBatch, sheet: ParsedSheet) -> None:
     if sheet.exam_date:
         batch.reference_period = sheet.exam_date.strftime("%Y-%m")
 
-    if not sheet.cohort_name:
+    if not sheet.cohort_name and not sheet.has_cohort_column:
         db.add(
             ImportIssue(
                 batch_id=batch.id,
                 code="no_title",
-                message="Título da turma não encontrado acima do cabeçalho.",
+                message="Turma não encontrada: a planilha não tem a coluna Turma nem título acima do cabeçalho.",
                 severity=IssueSeverity.WARNING,
+            )
+        )
+    for issue in sheet.issues:
+        db.add(
+            ImportIssue(
+                batch_id=batch.id,
+                field=issue.field,
+                code=issue.code,
+                severity=IssueSeverity(issue.severity),
+                message=issue.message,
+                raw_value=issue.raw_value,
             )
         )
     for label in sheet.missing_optional:
@@ -245,13 +267,12 @@ def _apply_sheet(db: Session, batch: ImportBatch, sheet: ParsedSheet) -> None:
 
 
 def _row_hash(sheet: ParsedSheet, row: ParsedRow) -> str:
+    values = dict(row.values)
+    if values.get("cpf"):
+        values["cpf"] = cpf_hash(str(values["cpf"]))
     payload = {
-        "cohort": sheet.cohort_name,
         "exam": sheet.exam_date.isoformat() if sheet.exam_date else None,
-        **{
-            k: (v.isoformat() if hasattr(v, "isoformat") else v)
-            for k, v in sorted(row.values.items())
-        },
+        **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in sorted(values.items())},
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -310,25 +331,67 @@ def _norm(ctx: _Context, field_name: str, raw: str | None) -> str | None:
     return ctx.value_maps.get((field_name, normalize_key(raw)), clean(raw))
 
 
-def _candidate_for(ctx: _Context, full_name: str, existing: Application | None) -> Candidate:
-    if existing is not None:
-        candidate = existing.candidate
-        if candidate.full_name != full_name:
-            candidate.full_name = full_name
-            candidate.name_search = normalize_key(full_name)
-        return candidate
-    key = normalize_key(full_name)
-    candidate = ctx.db.scalar(select(Candidate).where(Candidate.name_search == key))
+def _match_candidate(db: Session, values: dict) -> Candidate | None:
+    """Pelo CPF; sem CPF na linha, pelo nome. Com CPF, só une a um homônimo que não tenha CPF."""
+    cpf = values.get("cpf")
+    if cpf:
+        found = db.scalar(select(Candidate).where(Candidate.cpf_hash == cpf_hash(str(cpf))))
+        if found is not None:
+            return found
+    query = select(Candidate).where(Candidate.name_search == normalize_key(values["full_name"]))
+    if cpf:
+        query = query.where(Candidate.cpf_hash.is_(None))
+    return db.scalar(query.order_by(Candidate.id))
+
+
+def _set_cpf(db: Session, candidate: Candidate, cpf: object) -> None:
+    if not cpf or candidate.cpf_hash:
+        return
+    digest = cpf_hash(str(cpf))
+    if db.scalar(select(Candidate.id).where(Candidate.cpf_hash == digest)) is not None:
+        return  # o CPF já pertence a outro candidato
+    candidate.cpf_hash = digest
+    candidate.cpf_encrypted = encrypt_value(format_cpf(str(cpf)) or str(cpf))
+    candidate.cpf_masked = mask_cpf(str(cpf))
+
+
+def _candidate_for(ctx: _Context, values: dict, existing: Application | None) -> Candidate:
+    full_name = str(values["full_name"])
+    candidate = existing.candidate if existing is not None else _match_candidate(ctx.db, values)
     if candidate is None:
         candidate = Candidate(
             full_name=full_name,
-            name_search=key,
+            name_search=normalize_key(full_name),
             first_seen_at=utcnow(),
             is_demo=ctx.is_demo,
         )
         ctx.db.add(candidate)
         ctx.db.flush()
+    elif existing is not None and candidate.full_name != full_name:
+        candidate.full_name = full_name
+        candidate.name_search = normalize_key(full_name)
+    _set_cpf(ctx.db, candidate, values.get("cpf"))
     return candidate
+
+
+def find_application(db: Session, values: dict) -> Application | None:
+    """Candidatura da linha: pelo ID do cadastro ou pelo candidato + turma."""
+    if values.get("external_record_id"):
+        return db.scalar(
+            select(Application).where(Application.external_record_id == values["external_record_id"])
+        )
+    candidate = _match_candidate(db, values)
+    if candidate is None:
+        return None
+    cohort = values.get("cohort_name")
+    return db.scalar(
+        select(Application)
+        .where(
+            Application.candidate_id == candidate.id,
+            Application.cohort_name == cohort if cohort else Application.cohort_name.is_(None),
+        )
+        .order_by(Application.id)
+    )
 
 
 def _fmt(value: object) -> str | None:
@@ -346,19 +409,18 @@ def _upsert_row(
     db, batch, v = ctx.db, ctx.batch, row.values
     row_hash = _row_hash(sheet, row)
 
-    existing = db.scalar(
-        select(Application).where(Application.external_record_id == v["external_record_id"])
-    )
+    existing = find_application(db, v)
     if existing is not None and existing.row_hash == row_hash:
         return RowOutcome.UNCHANGED, existing
 
     agency = _agency(ctx, str(v["agency"]))
-    candidate = _candidate_for(ctx, str(v["full_name"]), existing)
+    candidate = _candidate_for(ctx, v, existing)
     status = get_or_create_status(db, str(v["status"]), ctx.statuses) if v["status"] else None
     registered = v["site_registered_at"]
 
     fields: dict[str, object] = {
         "agency_id": agency.id,
+        "agency_branch_raw": v["agency_branch"],
         "regional_raw": v["regional"],
         "regional_norm": _norm(ctx, "regional", v["regional"]),
         "sub_representative_raw": v["sub_representative"],
@@ -366,7 +428,13 @@ def _upsert_row(
         "susep_active_raw": v["susep_active"],
         "susep_number": v["susep_number"],
         "relationship_program_raw": v["relationship_program"],
-        "cohort_name": sheet.cohort_name,
+        "executive_raw": v["executive"],
+        "suspended_raw": v["suspended"],
+        "exams_count": v["exams_count"],
+        "status_ens_raw": v["status_ens"],
+        "status_final_raw": v["status_final"],
+        "evaluation_date": v["evaluation_date"].astimezone(LOCAL_TZ).date() if v["evaluation_date"] else None,
+        "cohort_name": v["cohort_name"],
         "exam_date": sheet.exam_date,
         "site_registered_at": registered,
         "registered_at": registered.astimezone(LOCAL_TZ).date() if registered else None,
@@ -516,16 +584,23 @@ def _restore_from(db: Session, previous: ImportBatch, applications: list[Applica
     for application in applications:
         application.last_import_batch_id = previous.id
     try:
-        sheet = parse_workbook(previous.file_content or b"")
+        sheet = parse_workbook(previous.file_content or b"", load_columns(db))
     except TemplateError:
         return 0
-    rows = {str(r.values.get("external_record_id")): r for r in sheet.rows if not r.rejected}
+    wanted = {a.id for a in applications}
+    rows: dict[int, ParsedRow] = {}
+    for row in sheet.rows:
+        if row.rejected:
+            continue
+        found = find_application(db, row.values)
+        if found is not None and found.id in wanted:
+            rows.setdefault(found.id, row)
     ctx = _Context(db=db, batch=previous, is_demo=previous.source == ImportSource.DEMO)
     for mapping in db.scalars(select(ValueMapping)):
         ctx.value_maps[(mapping.field, mapping.normalized_key)] = mapping.normalized_value
     restored = 0
     for application in applications:
-        row = rows.get(application.external_record_id)
+        row = rows.get(application.id)
         if row is not None:
             _upsert_row(ctx, sheet, row, track=False)
             application.status_changed_at = db.scalar(

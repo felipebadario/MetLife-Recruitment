@@ -224,9 +224,7 @@ def list_batches(
 @router.get("/sample")
 def sample_spreadsheet(_: ImportManager) -> Response:
     """Planilha FICTÍCIA no mesmo modelo das turmas, para testar a importação."""
-    content = build_cohort_workbook(
-        "DEMO T99", date.today() + timedelta(days=20), first_id=900000, size=60, seed=99
-    )
+    content = build_cohort_workbook("DEMO T99", date.today() + timedelta(days=20), size=60, seed=99)
     return Response(
         content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

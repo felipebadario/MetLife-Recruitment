@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
 import { outcomeTone, useOutcomes } from "@/lib/outcomes";
 import type { ApplicationDetail, TimelineEvent } from "@/lib/types";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, formatRegistered } from "@/lib/utils";
 
 type Tab = "personal" | "profile" | "process" | "history";
 
@@ -125,7 +125,13 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
       open={applicationId != null}
       onOpenChange={(open) => !open && onClose()}
       title={app?.full_name ?? "Carregando…"}
-      description={app ? `${app.agency_name}, ID ${app.external_record_id ?? "—"}` : undefined}
+      description={
+        app
+          ? [app.agency_name, app.cohort_name && `turma ${app.cohort_name}`, app.external_record_id && `ID ${app.external_record_id}`]
+              .filter(Boolean)
+              .join(", ")
+          : undefined
+      }
     >
       {detail.isPending ? (
         <div className="flex flex-col gap-3 p-6">
@@ -152,12 +158,13 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
                 <Fields
                   items={[
                     ["Nome", app.full_name],
-                    ["ID do registro", app.external_record_id],
-                    ["Cadastro no site", app.registered_at ? formatDateTime(app.registered_at) : null],
+                    ["CPF", app.cpf_masked],
+                    ...(app.external_record_id ? ([["ID do registro", app.external_record_id]] as [string, ReactNode][]) : []),
+                    ["Data de cadastro", app.registered_at ? formatRegistered(app.registered_at) : null],
                   ]}
                 />
                 <p className="text-[13px] text-muted">
-                  O modelo atual da planilha não traz CPF, contato nem endereço.
+                  A planilha não traz contato nem endereço. O CPF aparece mascarado.
                 </p>
               </div>
             )}
@@ -165,11 +172,16 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
               <Fields
                 items={[
                   ["Agência", app.agency_name],
+                  ["Código da agência", app.agency_branch],
                   ["Regional", app.regional],
-                  ["Sub-representante", app.sub_representative],
-                  ["Programa de relacionamento", app.relationship_program],
-                  ["SUSEP ativa", app.susep_active],
-                  ["Número SUSEP", app.susep_number],
+                  ["Executivo", app.executive],
+                  ["Representante (R.N)", app.sub_representative],
+                  // Colunas do modelo anterior: só aparecem quando vieram na planilha.
+                  ...([
+                    ["Programa de relacionamento", app.relationship_program],
+                    ["SUSEP ativa", app.susep_active],
+                    ["Número SUSEP", app.susep_number],
+                  ] as [string, string | null][]).filter(([, value]) => value),
                 ]}
               />
             )}
@@ -178,9 +190,14 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
                 <Fields
                   items={[
                     ["Turma", app.cohort_name],
-                    ["Data da prova", app.exam_date ? formatDate(app.exam_date) : null],
-                    ["Status na planilha", app.status_raw],
+                    ...(app.exam_date ? ([["Data da prova", formatDate(app.exam_date)]] as [string, ReactNode][]) : []),
+                    ["Data de avaliação", app.evaluation_date ? formatDate(app.evaluation_date) : null],
+                    ["Provas", app.exams_count],
+                    ["Suspenso", app.suspended],
+                    ["Status VGCF", app.status_raw],
                     ["Classificação", catalog.label(app.status.outcome)],
+                    ["Status ENS", app.status_ens],
+                    ["Status final", app.status_final],
                     ["Importado pela primeira vez", data.first_import?.file_name ?? null],
                   ]}
                 />

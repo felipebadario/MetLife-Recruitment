@@ -100,6 +100,14 @@ export interface ApplicationRow {
   susep_active: string | null;
   susep_number: string | null;
   relationship_program: string | null;
+  cpf_masked: string | null;
+  agency_branch: string | null;
+  executive: string | null;
+  suspended: string | null;
+  exams_count: number | null;
+  status_ens: string | null;
+  status_final: string | null;
+  evaluation_date: string | null;
   is_demo: boolean;
 }
 
@@ -269,4 +277,23 @@ export interface Dashboard {
   profile: { key: string; label: string; groups: (GroupStats & { value: string; suppressed?: boolean })[] }[];
   profile_min_group: number;
   time_to_hire_days: number | null;
+}
+
+export interface ImportTemplateColumn {
+  field: string;
+  name: string;
+  description: string;
+  kind: "text" | "identifier" | "cpf" | "date" | "integer";
+  headers: string[];
+  required: boolean;
+  active: boolean;
+  locked: boolean;
+  default_headers: string[];
+  default_required: boolean;
+  default_active: boolean;
+}
+
+export interface ImportTemplate {
+  columns: ImportTemplateColumn[];
+  is_default: boolean;
 }

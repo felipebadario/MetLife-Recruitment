@@ -31,7 +31,7 @@ import { api, ApiError, withQuery } from "@/lib/api";
 import { activeFilterCount, filtersFromSearch, filtersToQuery, useFilters, type Filters } from "@/lib/filters";
 import { outcomeTone } from "@/lib/outcomes";
 import type { ApplicationRow, CandidatesSummary, FilterOptions, Page, SavedFilter } from "@/lib/types";
-import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
+import { cn, formatDate, formatNumber, formatRegistered } from "@/lib/utils";
 
 import { CandidateSheet } from "./candidates/CandidateSheet";
 
@@ -53,16 +53,16 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (r) => <span className="font-semibold text-ink">{r.full_name}</span>,
   },
-  { key: "id", label: "ID", sort: "external_id", defaultVisible: true, render: (r) => <span className="tabular">{r.external_record_id ?? "—"}</span> },
+  { key: "id", label: "ID", sort: "external_id", defaultVisible: false, render: (r) => <span className="tabular">{r.external_record_id ?? "—"}</span> },
   { key: "agency", label: "Agência", sort: "agency", defaultVisible: true, render: (r) => r.agency_name },
   { key: "regional", label: "Regional", sort: "regional", defaultVisible: true, render: (r) => r.regional ?? "—" },
   { key: "cohort", label: "Turma", sort: "cohort", defaultVisible: true, render: (r) => r.cohort_name ?? "—" },
   {
     key: "registered",
-    label: "Cadastro no site",
+    label: "Data de cadastro",
     sort: "registered_at",
     defaultVisible: true,
-    render: (r) => <span className="tabular whitespace-nowrap">{formatDateTime(r.registered_at)}</span>,
+    render: (r) => <span className="tabular whitespace-nowrap">{formatRegistered(r.registered_at)}</span>,
   },
   {
     key: "status",
@@ -75,7 +75,13 @@ const COLUMNS: Column[] = [
       </Badge>
     ),
   },
-  { key: "sub", label: "Sub-representante", defaultVisible: false, render: (r) => r.sub_representative ?? "—" },
+  { key: "sub", label: "Representante (R.N)", defaultVisible: true, render: (r) => r.sub_representative ?? "—" },
+  { key: "status_final", label: "Status final", defaultVisible: false, render: (r) => r.status_final ?? "—" },
+  { key: "status_ens", label: "Status ENS", defaultVisible: false, render: (r) => r.status_ens ?? "—" },
+  { key: "executive", label: "Executivo", defaultVisible: false, render: (r) => r.executive ?? "—" },
+  { key: "branch", label: "Código da agência", defaultVisible: false, render: (r) => r.agency_branch ?? "—" },
+  { key: "exams", label: "Provas", defaultVisible: false, render: (r) => <span className="tabular">{r.exams_count ?? "—"}</span> },
+  { key: "suspended", label: "Suspenso", defaultVisible: false, render: (r) => r.suspended ?? "—" },
   {
     key: "exam",
     label: "Data da prova",

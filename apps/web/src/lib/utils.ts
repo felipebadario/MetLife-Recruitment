@@ -28,6 +28,13 @@ export function formatDate(value: string | null | undefined): string {
   return value ? dateFormat.format(parseApiDate(value)) : "—";
 }
 
+/** Data de cadastro: sem o horário quando a planilha trouxe só o dia ou o mês (meia-noite). */
+export function formatRegistered(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = parseApiDate(value);
+  return date.getHours() === 0 && date.getMinutes() === 0 ? dateFormat.format(date) : dateTimeFormat.format(date);
+}
+
 export function formatNumber(value: number | null | undefined): string {
   return value == null ? "—" : numberFormat.format(value);
 }

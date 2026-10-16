@@ -177,7 +177,7 @@ function RepresentativePanel({ data, onSelect }: { data: Dashboard; onSelect: (p
     <Panel>
       <PanelHeader
         title="Desempenho por representante"
-        description="Resultado de cada sub-representante dentro da sua agência. Clique em uma linha para ver o dashboard só daquele representante."
+        description="Resultado de cada representante (R.N) dentro da sua agência. Clique em uma linha para ver o dashboard só daquele representante."
         actions={<OutcomeLegend />}
       />
       <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
