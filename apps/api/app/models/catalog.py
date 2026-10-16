@@ -159,13 +159,17 @@ class ImportColumn(TimestampMixin, Base):
     """Padrão de colunas da planilha de turma, mantido em Administração > Padrão da planilha.
 
     Uma linha por campo do sistema (`field`, ver FIELDS em app/importing/template.py). Campo sem
-    linha aqui segue o padrão inicial do código; "restaurar o padrão" apaga as linhas.
+    linha aqui segue o padrão inicial do código; "restaurar o padrão" apaga as linhas. Campos
+    criados pelo administrador têm `field` começando com "extra_" e o valor vai para
+    `applications.custom_fields`.
     """
 
     __tablename__ = "import_columns"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     field: Mapped[str] = mapped_column(String(40), unique=True)
+    # Nome do campo no sistema; vazio segue o nome do padrão inicial.
+    label: Mapped[str | None] = mapped_column(String(80))
     # Nomes aceitos no cabeçalho, o primeiro é o principal.
     headers: Mapped[list] = mapped_column(JSONType, default=list)
     is_required: Mapped[bool] = mapped_column(Boolean, default=False)

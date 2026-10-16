@@ -17,6 +17,7 @@ from sqlalchemy.orm import aliased
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
 from app.core.security import utcnow
+from app.importing.columns import load_columns
 from app.models import (
     UNMAPPED_OUTCOME,
     Agency,
@@ -85,6 +86,7 @@ class ApplicationRow(BaseModel):
     status_ens: str | None
     status_final: str | None
     evaluation_date: date | None
+    custom_fields: dict[str, str | None] = {}
     is_demo: bool
 
 
@@ -133,6 +135,7 @@ def _row(app: Application, cand: Candidate, agency: Agency, st: ProcessStatus | 
         status_ens=app.status_ens_raw,
         status_final=app.status_final_raw,
         evaluation_date=app.evaluation_date,
+        custom_fields=app.custom_fields or {},
         is_demo=app.is_demo,
     )
 
@@ -384,6 +387,8 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
         "Suspenso", "Provas", "Status VGCF", "Classificação", "Status ENS", "Status Final", "Data Avaliação",
         "Data Cadastro", "Data da prova", "ID", "SUSEP Ativa?", "Número SUSEP", "Programa Relacionamento",
     ]
+    custom = [c for c in load_columns(db) if c.custom]
+    header += [c.display_name for c in custom]
     ws.append(header)
     labels = outcome_labels(db)
     for cell in ws[1]:
@@ -414,6 +419,7 @@ def export_applications(request: Request, user: Exporter, db: DbSession, filters
                 row.susep_active,
                 row.susep_number,
                 row.relationship_program,
+                *(row.custom_fields.get(c.key) for c in custom),
             ]
         )
     ws.freeze_panes = "A2"

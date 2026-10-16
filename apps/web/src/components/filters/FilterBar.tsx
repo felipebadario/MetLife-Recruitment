@@ -182,7 +182,7 @@ export function FilterBar({
           }))}
         />
         <MultiSelect
-          label="Status"
+          label="Status VGCF"
           selected={filters.status_id}
           onChange={(status_id) => onChange({ status_id })}
           options={(options?.statuses ?? []).map((s) => ({

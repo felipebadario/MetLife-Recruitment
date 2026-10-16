@@ -236,11 +236,6 @@ function StatusRow({ status }: { status: CatalogStatus }) {
       <td className="px-5 py-3">
         <p className="font-semibold text-ink">{status.raw_values.join(", ") || status.label}</p>
         <p className="tabular text-xs text-muted">{formatNumber(status.applications)} candidaturas</p>
-        {!status.is_official && (
-          <Badge tone="warning" className="mt-1">
-            Fora da lista VGCF
-          </Badge>
-        )}
       </td>
       <td className="px-5 py-3">
         <Input
@@ -409,7 +404,7 @@ export function CatalogsPage() {
       <Panel>
         <PanelHeader
           title="Classificação dos status"
-          description="Cada status da coluna Status VGCF precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos status. Status fora da lista VGCF sem candidaturas podem ser excluídos."
+          description="Cada status da coluna Status VGCF precisa de uma classificação para entrar nas taxas. O sistema não presume o significado dos status. Status que chegaram pelas planilhas e não têm candidaturas podem ser excluídos."
           actions={
             unused > 0 ? (
               <Button
@@ -417,7 +412,7 @@ export function CatalogsPage() {
                 variant="secondary"
                 loading={cleanup.isPending}
                 onClick={() => {
-                  if (window.confirm(`Excluir ${plural(unused, "status sem uso", "status sem uso")}? Os da lista VGCF e os usados por candidaturas ficam.`))
+                  if (window.confirm(`Excluir ${plural(unused, "status sem uso", "status sem uso")}? Os da lista inicial e os usados por candidaturas ficam.`))
                     cleanup.mutate();
                 }}
               >

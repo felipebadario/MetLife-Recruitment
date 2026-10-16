@@ -137,3 +137,69 @@ def test_only_admin_manages_template(client, make_user):
     login(client, "op@example.com")
     assert client.get(URL).status_code == 403
     assert client.put(URL, json={"columns": []}).status_code == 403
+
+
+def _add_header(content: bytes, header: str, values: list[str]) -> bytes:
+    wb = load_workbook(io.BytesIO(content))
+    ws = wb.active
+    column = ws.max_column + 1
+    ws.cell(row=1, column=column).value = header
+    for row, value in enumerate(values, start=2):
+        ws.cell(row=row, column=column).value = value
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def test_field_name_is_editable(client, make_user):
+    _admin(client, make_user)
+    columns = client.get(URL).json()["columns"]
+    payload = _payload(_with(columns, "executive", name="Gerente comercial"))
+    payload["columns"] = [
+        {**c, "name": "Gerente comercial"} if c["field"] == "executive" else c for c in payload["columns"]
+    ]
+    saved = client.put(URL, json=payload).json()
+    executive = next(c for c in saved["columns"] if c["field"] == "executive")
+    assert executive["name"] == "Gerente comercial" and executive["default_name"] == "Executivo"
+    assert not saved["is_default"]
+
+    fields = {f["field"]: f for f in client.get("/api/catalogs/fields").json()}
+    assert fields["executive"]["name"] == "Gerente comercial"
+    assert fields["status"]["name"] == "Status VGCF"
+
+    # Dois campos com o mesmo nome não são aceitos.
+    payload["columns"] = [{**c, "name": "Regional"} if c["field"] == "executive" else c for c in payload["columns"]]
+    assert client.put(URL, json=payload).status_code == 422
+
+
+def test_new_field_is_imported_shown_and_exported(client, make_user):
+    _admin(client, make_user)
+    columns = client.get(URL).json()["columns"]
+    payload = _payload(columns)
+    payload["columns"].append({"field": None, "name": "Origem do lead", "headers": [], "active": True})
+    saved = client.put(URL, json=payload).json()
+    created = saved["columns"][-1]
+    assert created["custom"] and created["name"] == "Origem do lead"
+    assert created["headers"] == ["Origem do lead"]  # sem coluna informada, vale o nome do campo
+    key = created["field"]
+    assert key.startswith("extra_")
+
+    content = build_cohort_workbook("DEMO T93", date(2026, 4, 1), size=3, seed=6)
+    content = _add_header(content, "Origem do lead", ["Indicação", "Site", None])
+    detail = _import(client, content)
+    assert detail["batch"]["status"] == "completed"
+
+    rows = client.get("/api/candidates?page_size=10").json()["items"]
+    values = sorted((r["custom_fields"].get(key) or "") for r in rows)
+    assert values == ["", "Indicação", "Site"]
+
+    export = client.get("/api/candidates/export")
+    sheet = load_workbook(io.BytesIO(export.content)).active
+    header = [c.value for c in sheet[1]]
+    assert header[-1] == "Origem do lead"
+
+    # Mantém a chave ao salvar de novo e sai do padrão quando retirado.
+    again = client.put(URL, json={"columns": [*_payload(columns)["columns"], {**created, "name": "Origem"}]}).json()
+    assert again["columns"][-1]["field"] == key and again["columns"][-1]["name"] == "Origem"
+    removed = client.put(URL, json=_payload(columns)).json()
+    assert not any(c["custom"] for c in removed["columns"])

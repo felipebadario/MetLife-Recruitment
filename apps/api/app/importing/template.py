@@ -87,26 +87,49 @@ FIELDS: tuple[FieldSpec, ...] = (
 FIELDS_BY_KEY = {f.key: f for f in FIELDS}
 
 
+# Campos criados pelo administrador (sem código): texto guardado como veio, em
+# `applications.custom_fields`. A chave começa com este prefixo.
+CUSTOM_PREFIX = "extra_"
+MAX_CUSTOM_FIELDS = 30
+
+
+def is_custom(key: str) -> bool:
+    return key.startswith(CUSTOM_PREFIX)
+
+
 @dataclass(frozen=True)
 class Column:
-    """Configuração em vigor de um campo: nomes aceitos, se é obrigatório e se é lido."""
+    """Configuração em vigor de um campo: nome no sistema, nomes aceitos, se é obrigatório e se é lido."""
 
     key: str
     headers: tuple[str, ...]
     required: bool
     active: bool
+    name: str = ""  # vazio: o nome do padrão inicial
 
     @property
-    def spec(self) -> FieldSpec:
-        return FIELDS_BY_KEY[self.key]
+    def spec(self) -> FieldSpec | None:
+        return FIELDS_BY_KEY.get(self.key)
+
+    @property
+    def custom(self) -> bool:
+        return is_custom(self.key)
+
+    @property
+    def kind(self) -> str:
+        return self.spec.kind if self.spec else "text"
+
+    @property
+    def display_name(self) -> str:
+        return self.name or (self.spec.name if self.spec else self.key)
 
     @property
     def label(self) -> str:
-        return self.headers[0] if self.headers else self.spec.name
+        return self.headers[0] if self.headers else self.display_name
 
 
 def default_columns() -> list[Column]:
-    return [Column(f.key, f.headers, f.required, f.active) for f in FIELDS]
+    return [Column(f.key, f.headers, f.required, f.active, f.name) for f in FIELDS]
 
 
 def header_key(value: object) -> str:
@@ -306,7 +329,7 @@ def parse_workbook(content: bytes, columns: list[Column] | None = None) -> Parse
                 cells = list(row)
                 if not any(clean(c) for c in cells):
                     continue
-                parsed = _parse_row(row_number, cells, header, found, cohort)
+                parsed = _parse_row(row_number, cells, header, found, cohort, columns)
                 _check_duplicate(parsed, seen)
                 rows.append(parsed)
 
@@ -356,7 +379,7 @@ def _check_duplicate(parsed: ParsedRow, seen: dict[object, int]) -> None:
 
 
 def _unknown_statuses(rows: list[ParsedRow]) -> list[Issue]:
-    """Um aviso por status fora da lista oficial, com a quantidade de linhas."""
+    """Um aviso por status VGCF que ainda não estava na lista inicial, com a quantidade de linhas."""
     counts = Counter(
         str(r.values["status"]) for r in rows
         if not r.rejected and r.values.get("status") and vgcf.lookup(r.values["status"]) is None
@@ -364,8 +387,8 @@ def _unknown_statuses(rows: list[ParsedRow]) -> list[Issue]:
     return [
         Issue(
             "status_unknown",
-            f"Status fora da lista oficial VGCF em {n} linha{'s' if n > 1 else ''}. "
-            "Ele foi cadastrado como novo status, sem classificação.",
+            f"Status VGCF novo em {n} linha{'s' if n > 1 else ''}. "
+            "Ele entrou na lista de Status VGCF, sem classificação.",
             "status",
             value,
             severity="warning",
@@ -380,6 +403,7 @@ def _parse_row(
     header: list[object],
     found: dict[str, int],
     title_cohort: str | None,
+    columns: list[Column],
 ) -> ParsedRow:
     def cell(key: str) -> object:
         index = found.get(key)
@@ -395,9 +419,11 @@ def _parse_row(
 
     parsed = ParsedRow(row_number=row_number, values={}, raw=raw)
     values = parsed.values
+    names = {c.key: c.display_name for c in columns}
 
     for spec in FIELDS:
         value = cell(spec.key)
+        name = names.get(spec.key, spec.name)
         if spec.kind == "identifier":
             values[spec.key] = _as_identifier(value)
         elif spec.kind == "cpf":
@@ -408,7 +434,7 @@ def _parse_row(
             except ValueError:
                 values[spec.key] = None
                 parsed.issues.append(
-                    Issue("invalid_number", f"{spec.name}: número não reconhecido.", spec.key,
+                    Issue("invalid_number", f"{name}: número não reconhecido.", spec.key,
                           _cell_text(value), severity="warning")
                 )
         elif spec.kind == "date":
@@ -419,12 +445,16 @@ def _parse_row(
                 parsed.issues.append(
                     Issue(
                         "invalid_date",
-                        f"{spec.name}: data não reconhecida (use dd/mm/aaaa ou mês/ano, como Nov/2023).",
+                        f"{name}: data não reconhecida (use dd/mm/aaaa ou mês/ano, como Nov/2023).",
                         spec.key, _cell_text(value), severity="warning",
                     )
                 )
         else:
             values[spec.key] = clean(value)
+
+    custom = [c for c in columns if c.custom and c.active]
+    if custom:  # só entra quando há campo criado, para não mudar a assinatura das linhas antigas
+        values["custom_fields"] = {c.key: _cell_text(cell(c.key)) for c in custom}
 
     if not values["cohort_name"]:
         values["cohort_name"] = title_cohort
