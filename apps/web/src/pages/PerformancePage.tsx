@@ -445,12 +445,12 @@ export function PerformancePage() {
               title="Análise de perfil"
               description="Leitura descritiva de características da planilha versus resultado. Não é usada para decidir contratações."
             />
-            <div className="grid gap-6 p-5 xl:grid-cols-3">
+            <div className="grid gap-6 p-5 2xl:grid-cols-3">
               {data.profile.map((dimension) => (
                 <div key={dimension.key} className="min-w-0">
                   <h3 className="mb-2 text-sm font-semibold">{dimension.label}</h3>
                   <div className="rounded-[var(--radius-control)] border border-line">
-                    <GroupTable compact firstLabel={dimension.label} groups={dimension.groups} minGroup={data.profile_min_group} />
+                    <GroupTable firstLabel={dimension.label} groups={dimension.groups} minGroup={data.profile_min_group} />
                   </div>
                 </div>
               ))}
