@@ -9,8 +9,10 @@ Regras (ver docs/pending-validations.md para o que ainda depende do negócio):
   registro campo a campo.
 - Candidato sem CPF no modelo atual: é identificado pelo nome normalizado. Pendente de
   validação (homônimos seriam unidos).
-- Status desconhecido vira um status "não classificado" no catálogo, para o administrador
-  classificar. O sistema não interpreta códigos como PAGA ou REPRC por conta própria.
+- Status VGCF: o valor da planilha é ligado ao status oficial de mesmo nome (ou abreviação
+  conhecida, ver app/importing/vgcf.py). Valor fora da lista vira um status próprio, com aviso
+  na importação. Em ambos os casos o significado (aprovado, contratado...) começa "não
+  classificado" e é definido pelo administrador.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import utcnow
 from app.core.text import clean, normalize_key, slug
+from app.importing import vgcf
 from app.importing.template import (
     LOCAL_TZ,
     TEMPLATE_NAME,
@@ -274,17 +277,23 @@ def get_or_create_status(db: Session, raw: str, cache: dict | None = None) -> Pr
     if mapping is not None:
         status = mapping.status
     else:
-        code = slug(raw)
+        official = vgcf.lookup(raw)
+        if official is not None:
+            position, item = official
+            code, label, description = item.code, item.label, vgcf.DESCRIPTION
+        else:
+            position, code, label = vgcf.OTHER_POSITION, slug(raw), clean(raw) or slug(raw)
+            description = "Fora da lista oficial VGCF. Criado automaticamente na importação."
         status = db.scalar(select(ProcessStatus).where(ProcessStatus.code == code))
         if status is None:
             status = ProcessStatus(
                 code=code,
-                label=clean(raw) or code,
+                label=label,
                 outcome=ProcessOutcome.UNMAPPED,
-                position=0,
+                position=position,
                 is_active=True,
                 is_provisional=True,
-                description="Criado automaticamente na importação. Classifique em Administração.",
+                description=description,
             )
             db.add(status)
             db.flush()

@@ -186,6 +186,8 @@ export interface CatalogStatus {
   id: number;
   code: string;
   label: string;
+  abbreviation: string | null;
+  is_official: boolean;
   outcome: Outcome;
   funnel_stage_id: number | null;
   is_provisional: boolean;

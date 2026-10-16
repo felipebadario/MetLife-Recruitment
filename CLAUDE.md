@@ -5,7 +5,7 @@ Aplicação interna de recrutamento de corretores: consolida as planilhas de tur
 ## Estrutura
 
 - `apps/api` — backend Python 3.11+ (FastAPI, SQLAlchemy 2, Alembic). SQLite local; PostgreSQL no Render.
-  - `app/importing/` — leitura do modelo de planilha da turma (`template.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
+  - `app/importing/` — leitura do modelo de planilha da turma (`template.py`), lista oficial de status (`vgcf.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
   - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (status, funil, fórmulas), `performance` (dashboard).
   - `app/services/filters.py` — filtros globais compartilhados pelo CRM e pelo dashboard.
   - `alembic/versions/` — migrações escritas à mão; o CI roda `alembic check` contra os modelos.
@@ -37,7 +37,7 @@ npm run build                          # checagem de tipos + build
 
 ## Regras do projeto
 
-- **Não inventar regra de negócio.** Códigos de status da planilha (PAGA, AGUA, REPRC, CANC, ENVIA, ENTRE) entram como "não classificados"; quem classifica é o administrador. "PAGA" não é contratação por padrão. Toda regra indefinida vai para `docs/pending-validations.md`.
+- **Não inventar regra de negócio.** A coluna Status VGCF traz o nome completo de um dos nove status oficiais (`app/importing/vgcf.py`); abreviações não são reconhecidas na importação (a abreviação no catálogo é só exibição). Os status entram como "não classificados"; quem classifica é o administrador. "Pagamento Confirmado" não é contratação por padrão. Toda regra indefinida vai para `docs/pending-validations.md`.
 - **Valor bruto e normalizado separados**: colunas `*_raw` guardam o que veio da planilha; `*_norm`/catálogos guardam a interpretação.
 - **Nada de dados reais no repositório** (ele é público): testes e demonstração usam só `app/importing/demo.py`. Nunca versione planilhas recebidas.
 - **Permissões checadas no backend** (`app/auth/permissions.py`): perfis `admin` (tudo) e `viewer` (somente leitura de Candidatos).

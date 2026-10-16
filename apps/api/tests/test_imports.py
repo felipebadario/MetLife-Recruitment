@@ -185,3 +185,44 @@ def test_sample_download(client, make_user):
     response = client.get("/api/imports/sample")
     assert response.status_code == 200
     assert parse_workbook(response.content).cohort_name == "DEMO T99"
+
+
+def test_vgcf_statuses_are_listed_before_any_import(client, make_user):
+    _admin(client, make_user)
+    labels = [s["label"] for s in client.get("/api/admin/statuses").json()]
+    assert labels == [
+        "Aguardando Pagamento", "Enviado para MLPARCEIRO", "Cancelado VGCF", "Reprovado Entrevista",
+        "Pagamento Confirmado", "Entrevista METLIFE", "Solicitado Kit Ferramenta", "Entrevista",
+        "Validação SUSEP",
+    ]
+    assert all(s["outcome"] == "unmapped" for s in client.get("/api/admin/statuses").json())
+
+
+def test_vgcf_full_names_share_the_official_status(client, make_user):
+    _admin(client, make_user)
+    content = _modify(_workbook(size=4), row=3, column=10, value="Pagamento Confirmado")
+    content = _modify(content, row=4, column=10, value="  pagamento   confirmado ")
+    content = _modify(content, row=5, column=10, value="Validacao SUSEP")
+    content = _modify(content, row=6, column=10, value="PAGA")  # abreviação não é reconhecida
+    batch = _upload(client, content).json()
+    detail = client.get(f"/api/imports/{batch['id']}").json()
+    unknown = [i for i in detail["issues"] if i["code"] == "status_unknown"]
+    assert [i["raw_value"] for i in unknown] == ["PAGA"]
+
+    statuses = {s["label"]: s for s in client.get("/api/admin/statuses").json()}
+    assert statuses["Pagamento Confirmado"]["applications"] == 2
+    assert statuses["Validação SUSEP"]["applications"] == 1
+    assert statuses["PAGA"]["applications"] == 1
+    assert not statuses["PAGA"]["is_official"] and statuses["Entrevista"]["is_official"]
+    assert list(statuses)[-1] == "PAGA"  # fora da lista oficial vai para o fim
+
+
+def test_status_abbreviation_is_display_only(client, make_user):
+    _admin(client, make_user)
+    status = next(s for s in client.get("/api/admin/statuses").json() if s["label"] == "Pagamento Confirmado")
+    response = client.patch(f"/api/admin/statuses/{status['id']}", json={"abbreviation": " PAGA "})
+    assert response.status_code == 200 and response.json()["abbreviation"] == "PAGA"
+    assert response.json()["outcome"] == "unmapped"
+
+    cleared = client.patch(f"/api/admin/statuses/{status['id']}", json={"abbreviation": ""}).json()
+    assert cleared["abbreviation"] is None

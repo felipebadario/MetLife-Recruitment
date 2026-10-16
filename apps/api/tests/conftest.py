@@ -29,13 +29,14 @@ os.environ["FIELD_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import delete  # noqa: E402
+from sqlalchemy import delete, update  # noqa: E402
 
 from app.core.config import API_DIR  # noqa: E402
 from app.core.security import hash_password, utcnow  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_sessionmaker  # noqa: E402
-from app.models import User, UserRole  # noqa: E402
+from app.importing.vgcf import VGCF_STATUSES  # noqa: E402
+from app.models import ProcessOutcome, ProcessStatus, User, UserRole  # noqa: E402
 
 # Catálogos semeados pelas migrações: preservados entre testes.
 _KEEP_TABLES = {"metric_definitions", "funnel_stages"}
@@ -56,7 +57,17 @@ def _clean_tables() -> Iterator[None]:
     yield
     with get_sessionmaker()() as db:
         for table in reversed(Base.metadata.sorted_tables):
-            if table.name not in _KEEP_TABLES:
+            if table.name == "process_statuses":
+                # Os status oficiais VGCF vêm da migração: voltam ao estado inicial.
+                official = [item.code for item in VGCF_STATUSES]
+                db.execute(delete(ProcessStatus).where(ProcessStatus.code.notin_(official)))
+                db.execute(
+                    update(ProcessStatus).values(
+                        outcome=ProcessOutcome.UNMAPPED, funnel_stage_id=None, abbreviation=None,
+                        is_provisional=True,
+                    )
+                )
+            elif table.name not in _KEEP_TABLES:
                 db.execute(delete(table))
         db.commit()
 
