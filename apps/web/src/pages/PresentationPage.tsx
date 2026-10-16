@@ -24,8 +24,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
 import { filtersToQuery, useFilters } from "@/lib/filters";
-import { OUTCOME_LABELS, formatRate } from "@/lib/outcomes";
-import type { Dashboard, FilterOptions, GroupStats, Outcome } from "@/lib/types";
+import { formatRate, useOutcomes, type OutcomeCatalog } from "@/lib/outcomes";
+import type { Dashboard, FilterOptions, GroupStats } from "@/lib/types";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 
 const TABLE_ROWS = 12;
@@ -67,12 +67,11 @@ function Slide({ spec, page, pages, scope }: { spec: SlideSpec; page: number; pa
   );
 }
 
-const KPI_OUTCOMES: Outcome[] = ["in_progress", "approved", "hired", "rejected", "withdrawn"];
-
 function KpiGrid({ stats }: { stats: GroupStats }) {
+  const catalog = useOutcomes();
   const items = [
     { label: "Candidaturas", value: formatNumber(stats.total) },
-    ...KPI_OUTCOMES.map((o) => ({ label: OUTCOME_LABELS[o], value: formatNumber(stats.by_outcome[o]) })),
+    ...catalog.classifiable.map((o) => ({ label: catalog.label(o), value: formatNumber(stats.by_outcome[o] ?? 0) })),
     { label: "Taxa de aprovação", value: formatRate(stats.rates.approval_rate) },
     { label: "Taxa de contratação", value: formatRate(stats.rates.hiring_rate) },
     { label: "Taxa de reprovação", value: formatRate(stats.rates.rejection_rate) },
@@ -120,7 +119,13 @@ function rankingSlides(
   }));
 }
 
-function buildSlides(data: Dashboard, scopeLines: string[], perAgency: boolean, perAgencyReps: boolean): SlideSpec[] {
+function buildSlides(
+  data: Dashboard,
+  catalog: OutcomeCatalog,
+  scopeLines: string[],
+  perAgency: boolean,
+  perAgencyReps: boolean,
+): SlideSpec[] {
   const totals: GroupStats = {
     total: data.totals.applications,
     by_outcome: data.totals.by_outcome,
@@ -172,10 +177,10 @@ function buildSlides(data: Dashboard, scopeLines: string[], perAgency: boolean, 
           <KpiGrid stats={totals} />
           <div className="grid grid-cols-2 gap-5">
             <Box title="Resultado por classificação">
-              <HorizontalBars total={data.totals.applications} rows={outcomeBars(data.totals.by_outcome)} />
+              <HorizontalBars total={data.totals.applications} rows={outcomeBars(data.totals.by_outcome, catalog)} />
             </Box>
             <Box title="Status VGCF mais frequentes">
-              <HorizontalBars total={data.totals.applications} rows={statusBars(data).slice(0, 6)} />
+              <HorizontalBars total={data.totals.applications} rows={statusBars(data, catalog).slice(0, 6)} />
             </Box>
           </div>
         </div>
@@ -194,7 +199,7 @@ function buildSlides(data: Dashboard, scopeLines: string[], perAgency: boolean, 
       subtitle: "Todos os status do recorte, com a classificação de cada um.",
       body: (
         <div className="columns-2 gap-8">
-          <HorizontalBars total={data.totals.applications} rows={statusBars(data)} />
+          <HorizontalBars total={data.totals.applications} rows={statusBars(data, catalog)} />
         </div>
       ),
     },
@@ -254,10 +259,10 @@ function buildSlides(data: Dashboard, scopeLines: string[], perAgency: boolean, 
             <KpiGrid stats={agency} />
             <div className="grid grid-cols-2 gap-5">
               <Box title="Resultado por classificação">
-                <HorizontalBars total={agency.total} rows={outcomeBars(agency.by_outcome)} />
+                <HorizontalBars total={agency.total} rows={outcomeBars(agency.by_outcome, catalog)} />
               </Box>
               <Box title="Status VGCF">
-                <HorizontalBars total={agency.total} rows={statusBars(data, { agencyId: agency.agency_id }).slice(0, 6)} />
+                <HorizontalBars total={agency.total} rows={statusBars(data, catalog, { agencyId: agency.agency_id }).slice(0, 6)} />
               </Box>
             </div>
           </div>
@@ -280,15 +285,16 @@ function buildSlides(data: Dashboard, scopeLines: string[], perAgency: boolean, 
 }
 
 function PeriodTable({ rows, label }: { rows: (GroupStats & { name: string })[]; label: string }) {
+  const catalog = useOutcomes();
   return (
     <table className="w-full text-left text-[12px]">
       <thead className="bg-surface/60 text-muted">
         <tr>
           <th className="px-2.5 py-2 font-semibold">{label}</th>
           <th className="px-2.5 py-2 text-right font-semibold">Candidaturas</th>
-          {KPI_OUTCOMES.map((o) => (
+          {catalog.classifiable.map((o) => (
             <th key={o} className="px-2.5 py-2 text-right font-semibold">
-              {OUTCOME_LABELS[o]}
+              {catalog.label(o)}
             </th>
           ))}
           <th className="px-2.5 py-2 text-right font-semibold">Aprovação</th>
@@ -300,9 +306,9 @@ function PeriodTable({ rows, label }: { rows: (GroupStats & { name: string })[];
           <tr key={r.name}>
             <td className="px-2.5 py-2 font-medium text-ink">{r.name}</td>
             <td className="tabular px-2.5 py-2 text-right">{formatNumber(r.total)}</td>
-            {KPI_OUTCOMES.map((o) => (
+            {catalog.classifiable.map((o) => (
               <td key={o} className="tabular px-2.5 py-2 text-right">
-                {formatNumber(r.by_outcome[o])}
+                {formatNumber(r.by_outcome[o] ?? 0)}
               </td>
             ))}
             <td className="tabular px-2.5 py-2 text-right">{formatRate(r.rates.approval_rate)}</td>
@@ -331,9 +337,10 @@ export function PresentationPage() {
     queryFn: () => api.get<Dashboard>(withQuery("/api/performance/dashboard", query)),
   });
 
-  const scopeLines = describeFilters(filters, options.data);
+  const catalog = useOutcomes();
+  const scopeLines = describeFilters(filters, options.data, catalog);
   const scope = scopeLines.length ? scopeLines.join(" · ") : "Todas as candidaturas";
-  const slides = dashboard.data ? buildSlides(dashboard.data, scopeLines, perAgency, perAgencyReps) : [];
+  const slides = dashboard.data ? buildSlides(dashboard.data, catalog, scopeLines, perAgency, perAgencyReps) : [];
 
   return (
     <div className="min-h-screen bg-surface print:bg-white">

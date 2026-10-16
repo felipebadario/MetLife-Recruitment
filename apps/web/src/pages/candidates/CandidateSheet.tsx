@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Sheet, Tabs } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
-import { OUTCOME_LABELS, OUTCOME_TONES } from "@/lib/outcomes";
+import { outcomeTone, useOutcomes } from "@/lib/outcomes";
 import type { ApplicationDetail, TimelineEvent } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 
@@ -109,6 +109,7 @@ function NoteForm({ applicationId }: { applicationId: number }) {
 }
 
 export function CandidateSheet({ applicationId, onClose }: { applicationId: number | null; onClose: () => void }) {
+  const catalog = useOutcomes();
   const { can } = useAuth();
   const [tab, setTab] = useState<Tab>("personal");
   const detail = useQuery({
@@ -138,10 +139,10 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 px-6 pt-4 pb-3">
-            <Badge tone={OUTCOME_TONES[app.status.outcome]} dot>
+            <Badge tone={outcomeTone(app.status.outcome)} dot>
               {app.status.label ?? "Sem status"}
             </Badge>
-            <span className="text-[13px] text-muted">{OUTCOME_LABELS[app.status.outcome]}</span>
+            <span className="text-[13px] text-muted">{catalog.label(app.status.outcome)}</span>
             {app.is_demo && <Badge tone="warning">Dado de demonstração</Badge>}
           </div>
           <Tabs tabs={TABS} value={tab} onChange={setTab} />
@@ -179,7 +180,7 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
                     ["Turma", app.cohort_name],
                     ["Data da prova", app.exam_date ? formatDate(app.exam_date) : null],
                     ["Status na planilha", app.status_raw],
-                    ["Classificação", OUTCOME_LABELS[app.status.outcome]],
+                    ["Classificação", catalog.label(app.status.outcome)],
                     ["Importado pela primeira vez", data.first_import?.file_name ?? null],
                   ]}
                 />
@@ -195,7 +196,7 @@ export function CandidateSheet({ applicationId, onClose }: { applicationId: numb
                             <span className="font-medium text-ink">{other.cohort_name ?? "Sem turma"}</span>
                             <span className="text-muted">, {other.agency_name}</span>
                           </span>
-                          <Badge tone={OUTCOME_TONES[other.status.outcome]}>{other.status.label ?? "—"}</Badge>
+                          <Badge tone={outcomeTone(other.status.outcome)}>{other.status.label ?? "—"}</Badge>
                         </li>
                       ))}
                     </ul>

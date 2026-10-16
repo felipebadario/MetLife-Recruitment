@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { CompositionBar } from "@/components/charts/charts";
 import type { Filters } from "@/lib/filters";
-import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER, formatRate } from "@/lib/outcomes";
+import { UNMAPPED, formatRate, useOutcomes, type OutcomeCatalog } from "@/lib/outcomes";
 import type { Dashboard, FilterOptions, GroupStats, Outcome } from "@/lib/types";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
@@ -26,18 +26,22 @@ export function SampleTag({ base, min }: { base: number; min: number }) {
   );
 }
 
-/** Linhas de barras por classificação (em ordem fixa), sem as classificações zeradas. */
-export function outcomeBars(byOutcome: Record<Outcome, number>) {
-  return OUTCOME_ORDER.filter((o) => byOutcome[o] > 0).map((o) => ({
+/** Linhas de barras por classificação (na ordem do catálogo), sem as classificações zeradas. */
+export function outcomeBars(byOutcome: Record<Outcome, number>, catalog: OutcomeCatalog) {
+  return catalog.order.filter((o) => (byOutcome[o] ?? 0) > 0).map((o) => ({
     key: o,
-    label: OUTCOME_LABELS[o],
+    label: catalog.label(o),
     value: byOutcome[o],
-    color: OUTCOME_COLORS[o],
+    color: catalog.color(o),
   }));
 }
 
 /** Linhas de barras por status VGCF, opcionalmente restritas a uma agência e/ou representante. */
-export function statusBars(data: Dashboard, scope: { agencyId?: number | null; representative?: string | null } = {}) {
+export function statusBars(
+  data: Dashboard,
+  catalog: OutcomeCatalog,
+  scope: { agencyId?: number | null; representative?: string | null } = {},
+) {
   const counts = new Map<number | null, number>();
   if (scope.representative != null) {
     for (const row of data.representative_status) {
@@ -56,11 +60,11 @@ export function statusBars(data: Dashboard, scope: { agencyId?: number | null; r
       key: String(s.status_id),
       label: (
         <>
-          {s.label} <span className="text-muted">({OUTCOME_LABELS[s.outcome]})</span>
+          {s.label} <span className="text-muted">({catalog.label(s.outcome)})</span>
         </>
       ),
       value: counts.get(s.status_id) ?? 0,
-      color: OUTCOME_COLORS[s.outcome],
+      color: catalog.color(s.outcome),
     }))
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -74,15 +78,6 @@ export interface RankRow extends GroupStats {
 
 type RankKey = "name" | "agency" | "total" | Outcome | "approval_rate" | "hiring_rate" | "rejection_rate" | "withdrawal_rate";
 
-const COUNT_COLUMNS: { key: Outcome; label: string }[] = [
-  { key: "in_progress", label: "Em andamento" },
-  { key: "approved", label: "Aprovados" },
-  { key: "hired", label: "Contratados" },
-  { key: "rejected", label: "Reprovados" },
-  { key: "withdrawn", label: "Desistências" },
-  { key: "unmapped", label: "Sem classificação" },
-];
-
 const RATE_COLUMNS: { key: "approval_rate" | "hiring_rate" | "rejection_rate" | "withdrawal_rate"; label: string }[] = [
   { key: "approval_rate", label: "Aprovação" },
   { key: "hiring_rate", label: "Contratação" },
@@ -94,7 +89,7 @@ function rankValue(row: RankRow, key: RankKey): number | string {
   if (key === "name") return row.name;
   if (key === "agency") return row.agency ?? "";
   if (key === "total") return row.total;
-  if (key in row.by_outcome) return row.by_outcome[key as Outcome];
+  if (key in row.by_outcome) return row.by_outcome[key];
   return row.rates[key] ?? -1;
 }
 
@@ -129,8 +124,12 @@ export function RankingTable({
       return sort.desc ? -cmp : cmp;
     });
   }, [rows, sort, print]);
-  const showUnmapped = rows.some((r) => r.by_outcome.unmapped > 0);
-  const counts = COUNT_COLUMNS.filter((c) => c.key !== "unmapped" || showUnmapped);
+  const catalog = useOutcomes();
+  const showUnmapped = rows.some((r) => (r.by_outcome[UNMAPPED] ?? 0) > 0);
+  // Uma coluna por classificação cadastrada; "não classificado" só quando houver.
+  const counts = catalog.order
+    .filter((o) => o !== UNMAPPED || showUnmapped)
+    .map((o) => ({ key: o, label: catalog.label(o) }));
 
   const header = (key: RankKey, label: string, right = true) => (
     <th key={key} scope="col" className={cn("px-2.5 py-2 font-semibold whitespace-nowrap", right && "text-right")}>
@@ -179,7 +178,7 @@ export function RankingTable({
               <td className="tabular px-2.5 py-2 text-right font-medium text-ink">{formatNumber(row.total)}</td>
               {counts.map((c) => (
                 <td key={c.key} className="tabular px-2.5 py-2 text-right">
-                  {formatNumber(row.by_outcome[c.key])}
+                  {formatNumber(row.by_outcome[c.key] ?? 0)}
                 </td>
               ))}
               {RATE_COLUMNS.map((c, i) => (
@@ -210,7 +209,7 @@ export function representativeRows(data: Dashboard, agencyId?: number | null): R
 }
 
 /** Resumo legível do recorte aplicado (para a apresentação). */
-export function describeFilters(filters: Filters, options: FilterOptions | undefined): string[] {
+export function describeFilters(filters: Filters, options: FilterOptions | undefined, catalog: OutcomeCatalog): string[] {
   const names = (ids: string[], list: { id: number; name?: string; label?: string }[] | undefined) =>
     ids.map((id) => list?.find((x) => String(x.id) === id)?.name ?? list?.find((x) => String(x.id) === id)?.label ?? id);
   const parts: string[] = [];
@@ -219,7 +218,7 @@ export function describeFilters(filters: Filters, options: FilterOptions | undef
   if (filters.regional.length) parts.push(`Regional: ${filters.regional.join(", ")}`);
   if (filters.cohort.length) parts.push(`Turma: ${filters.cohort.join(", ")}`);
   if (filters.status_id.length) parts.push(`Status: ${names(filters.status_id, options?.statuses).join(", ")}`);
-  if (filters.outcome.length) parts.push(`Classificação: ${filters.outcome.map((o) => OUTCOME_LABELS[o]).join(", ")}`);
+  if (filters.outcome.length) parts.push(`Classificação: ${filters.outcome.map((o) => catalog.label(o)).join(", ")}`);
   if (filters.susep_active.length) parts.push(`SUSEP ativa: ${filters.susep_active.join(", ")}`);
   if (filters.program.length) parts.push(`Programa: ${filters.program.join(", ")}`);
   if (filters.date_from || filters.date_to) {

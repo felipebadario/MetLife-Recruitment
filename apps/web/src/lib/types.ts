@@ -61,7 +61,21 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 // ---------------------------------------------------------------- CRM
-export type Outcome = "in_progress" | "approved" | "rejected" | "hired" | "withdrawn" | "unmapped";
+/** Código de uma classificação cadastrada em Status e catálogos (ex.: "hired", "unmapped"). */
+export type Outcome = string;
+
+export interface OutcomeCategory {
+  code: Outcome;
+  label: string;
+  color: string;
+  /** "Não classificado": do sistema, não pode ser excluída. */
+  is_system: boolean;
+}
+
+export interface OutcomeCategoryAdmin extends OutcomeCategory {
+  /** Quantos status estão nesta classificação. */
+  statuses: number;
+}
 
 export interface StatusRef {
   id: number | null;

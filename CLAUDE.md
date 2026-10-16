@@ -6,7 +6,7 @@ Aplicação interna de recrutamento de corretores: consolida as planilhas de tur
 
 - `apps/api` — backend Python 3.11+ (FastAPI, SQLAlchemy 2, Alembic). SQLite local; PostgreSQL no Render.
   - `app/importing/` — leitura do modelo de planilha da turma (`template.py`), lista oficial de status (`vgcf.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
-  - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (classificação de status, fórmulas), `performance` (dashboard).
+  - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (classificações, classificação de status, fórmulas), `performance` (dashboard).
   - `app/services/filters.py` — filtros globais compartilhados pelo CRM e pelo dashboard.
   - `alembic/versions/` — migrações escritas à mão; o CI roda `alembic check` contra os modelos.
 - `apps/web` — React 19 + TypeScript + Vite + Tailwind 4 + TanStack Query + React Router.
@@ -43,12 +43,13 @@ npm run build                          # checagem de tipos + build
 - **Permissões checadas no backend** (`app/auth/permissions.py`): perfis `admin` (tudo), `operational` (tudo menos o menu Administração e o "Apagar dados" da importação, `imports.reset`) e `viewer` (somente leitura de Candidatos).
 - Mudança de modelo exige migração Alembic nova (com `batch_alter_table` para funcionar no SQLite).
 - Toda ação administrativa relevante grava em `audit_logs` via `record_audit`. Retenção automática (`purge_audit_logs`, na inicialização e a cada 24 h): acessos (`ACCESS_ACTIONS`) 90 dias, demais ações 365 dias; ajustável por `AUDIT_ACCESS_RETENTION_DAYS` e `AUDIT_RETENTION_DAYS`.
-- Interface: tokens de cor e tipografia em `apps/web/src/styles/index.css`; cores das categorias de resultado em `src/lib/outcomes.ts` (ordem fixa, validada para daltonismo). Textos em linguagem simples, sem caixa alta em rótulos.
+- Interface: tokens de cor e tipografia em `apps/web/src/styles/index.css`; cores das classificações vêm do banco; a paleta padrão (validada para daltonismo) e as sugestões para novas ficam em `src/lib/outcomes.ts`. Textos em linguagem simples, sem caixa alta em rótulos.
 - Commits e PRs em português; o CI (`.github/workflows/ci.yml`) roda lint, testes em SQLite e PostgreSQL e o build do frontend.
 
 - **Importação**: menu próprio (`/importacao`, permissão `imports.manage`, fora da Administração; `src/pages/ImportsPage.tsx`). Até 20 planilhas por envio (`POST /api/imports/bulk`), processadas em sequência. Uma planilha pode ser excluída (`DELETE /api/imports/{id}`): o que veio só dela é apagado e o que também veio de outra volta aos dados da planilha anterior.
 - **Indicadores**: o dashboard (`/api/performance/dashboard`) traz totais, agências, representantes (sub-representante por agência) e status por agência/representante. Peças compartilhadas em `apps/web/src/components/performance/indicators.tsx`; a apresentação exportável (PDF pela impressão, uma página 16:9 por tela) fica em `src/pages/PresentationPage.tsx`, rota `/performance/apresentacao`.
 - **Logo**: símbolo da MetLife redesenhado em SVG (`BrandMark.tsx`) a partir do logotipo enviado; trocar pelo arquivo oficial quando houver.
+- **Classificações editáveis**: ficam em `outcome_categories` (código estável, nome, cor). O administrador cria, renomeia, troca a cor e exclui em Administração > Status e catálogos; excluir devolve os status dela a "não classificado" e a tira das fórmulas (bloqueado se for a única base de uma taxa). "Não classificado" (`unmapped`) é do sistema. O frontend lê a lista por `useOutcomes()` (`src/lib/outcomes.ts`).
 - **Sem funil**: a análise usa só a classificação dos status. As tabelas `funnel_stages` e `process_statuses.funnel_stage_id` continuam no banco, sem uso, para não perder dados.
 
 ## Situação

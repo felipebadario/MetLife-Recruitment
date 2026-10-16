@@ -4,6 +4,7 @@
  * com estado guardado apenas no navegador de quem está olhando.
  */
 import { ApiError } from "./api";
+import { DEFAULT_OUTCOMES } from "./outcomes";
 import { PREVIEW_ACCOUNTS } from "./preview";
 import type { AuditLog, Page, Permission, Session, User, UserRole } from "./types";
 
@@ -288,6 +289,8 @@ function route(method: string, path: string, query: URLSearchParams, data: Body)
     };
     return result;
   }
+
+  if (method === "GET" && path === "/api/catalogs/outcomes") return DEFAULT_OUTCOMES;
 
   fail(404, "Recurso não disponível na pré-visualização.");
 }
