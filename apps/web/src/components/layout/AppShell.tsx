@@ -28,7 +28,7 @@ function DemoBanner() {
     <div className="flex items-center justify-center gap-2 bg-brand-900 px-4 py-1.5 text-center text-xs font-medium text-brand-50">
       <FlaskConical className="size-3.5 shrink-0 text-green-500" aria-hidden />
       {PREVIEW
-        ? "Pré-visualização sem servidor: dados fictícios, guardados apenas neste navegador."
+        ? "Pré-visualização sem servidor: os dados ficam guardados apenas neste navegador e não são enviados a nenhum servidor."
         : "Ambiente de demonstração: todos os dados exibidos são fictícios."}
     </div>
   );

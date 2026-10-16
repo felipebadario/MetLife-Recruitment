@@ -11,6 +11,7 @@ import { Field, Input } from "@/components/ui/Field";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
+import { PREVIEW } from "@/lib/preview";
 import type { ImportBatch, ImportDetail, ImportStatus, Page } from "@/lib/types";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 
@@ -56,7 +57,12 @@ function UploadZone() {
     pick(event.dataTransfer.files);
   }
 
-  const result = upload.data;
+  const sample = useMutation({
+    mutationFn: () => api.post<ImportBatch>("/api/imports/sample-load"),
+    onSuccess: () => invalidateData(queryClient),
+    onError: (e) => setSampleError(errorText(e, "Não foi possível importar a planilha fictícia.")),
+  });
+  const result = upload.data ?? sample.data;
 
   return (
     <Panel>
@@ -64,16 +70,23 @@ function UploadZone() {
         title="Importar planilha da turma"
         description="Arquivo .xlsx no modelo da turma: título com a turma e a data da prova, seguido do cabeçalho com ID, Agência, Nome, Status e demais colunas."
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() =>
-              api.download("/api/imports/sample", "planilha_ficticia.xlsx").catch((e) => setSampleError(errorText(e, "Não foi possível baixar.")))
-            }
-          >
-            <Download className="size-4" aria-hidden />
-            Baixar planilha fictícia de teste
-          </Button>
+          PREVIEW ? (
+            <Button variant="secondary" size="sm" onClick={() => sample.mutate()} loading={sample.isPending}>
+              <FileSpreadsheet className="size-4" aria-hidden />
+              Importar planilha fictícia de teste
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                api.download("/api/imports/sample", "planilha_ficticia.xlsx").catch((e) => setSampleError(errorText(e, "Não foi possível baixar.")))
+              }
+            >
+              <Download className="size-4" aria-hidden />
+              Baixar planilha fictícia de teste
+            </Button>
+          )
         }
       />
       <div className="p-5">
@@ -120,7 +133,13 @@ function UploadZone() {
               : `Arquivo ${result.file_name} recebido. O resultado aparece na lista abaixo em instantes.`}
           </Alert>
         )}
-        <p className="mt-4 text-xs text-muted">
+        {PREVIEW && (
+          <p className="mt-4 text-xs text-muted">
+            Nesta pré-visualização a planilha é lida pelo próprio navegador: os dados não são enviados a nenhum servidor
+            e ficam guardados só neste navegador.
+          </p>
+        )}
+        <p className="mt-2 text-xs text-muted">
           Reimportar uma planilha atualizada da mesma turma é seguro: candidaturas sem mudança ficam como estão, e
           mudanças de status entram no histórico de cada candidato.
         </p>

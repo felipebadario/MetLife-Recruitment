@@ -77,6 +77,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 /** Envia um arquivo (multipart). */
 async function upload<T>(path: string, file: File): Promise<T> {
+  if (import.meta.env.VITE_PREVIEW === "true") {
+    const { mockUpload } = await import("./mockApi");
+    return mockUpload<T>(file);
+  }
   const form = new FormData();
   form.append("file", file);
   const response = await fetch(path, {
@@ -99,6 +103,12 @@ async function upload<T>(path: string, file: File): Promise<T> {
 
 /** Baixa um arquivo gerado pela API e entrega ao navegador para salvar. */
 async function download(path: string, fallbackName: string): Promise<void> {
+  if (import.meta.env.VITE_PREVIEW === "true") {
+    throw new ApiError(
+      400,
+      "Na pré-visualização o navegador não permite baixar arquivos. No sistema publicado a exportação funciona normalmente.",
+    );
+  }
   const response = await fetch(path, {
     credentials: "same-origin",
     headers: { "X-Requested-With": "XMLHttpRequest" },
