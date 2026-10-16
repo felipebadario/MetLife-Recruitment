@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parents[2]
@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 15
 
     demo_mode: bool = True
+
+    # Retenção da auditoria (dias). Registros de acesso (login, logout, acesso negado) são
+    # numerosos e perdem valor rápido; ações administrativas ficam mais tempo.
+    audit_access_retention_days: int = Field(default=90, ge=30)
+    audit_retention_days: int = Field(default=365, ge=30)
 
     # Primeiro administrador, criado na inicialização se ainda não houver nenhum usuário.
     # Útil em hospedagens sem terminal (ex.: Render). Depois do primeiro acesso, troque a senha.

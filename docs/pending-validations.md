@@ -16,6 +16,6 @@ O sistema **não inventa** regras de negócio. Cada item abaixo está modelado d
 | 10 | A planilha de cada turma é **snapshot completo** (todos os candidatos com status atual) ou parcial? | Histórico | Tratada como snapshot: cada reenvio atualiza status e registra a mudança no histórico. Candidatos ausentes em um reenvio não são alterados |
 | 11 | Significado de **Programa Relacionamento** (Integral, Básico) e **SUSEP Ativa?** no processo | Análise de perfil | Usados apenas como dimensões descritivas |
 | 12 | Linhas com **dados faltando** | Importação | ID, Agência e Nome obrigatórios (linha rejeitada sem eles); status vazio e data inválida geram aviso |
-| 13 | **Política de retenção** dos dados pessoais (LGPD) | Banco, backups | A definir |
+| 13 | **Política de retenção** dos dados pessoais (LGPD) | Banco, backups | Auditoria definida: acessos 90 dias, demais ações 365 dias, com limpeza automática (ajustável por variável de ambiente). Candidatos e importações: a definir |
 | 14 | **Hospedagem definitiva**: o Render (EUA, plano gratuito) serve para validação; dados reais em produção dependem de aprovação | Infraestrutura | Ver ADR 0003 |
 | 15 | Campos do briefing ausentes no modelo (CPF, contato, escolaridade, renda, experiências, avaliação comercial) | CRM, análise de perfil | Estrutura do banco pronta para recebê-los; telas mostram apenas o que a planilha traz |
