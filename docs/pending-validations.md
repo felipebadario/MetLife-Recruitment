@@ -1,21 +1,21 @@
 # Regras pendentes de validação
 
-O sistema **não inventa** regras de negócio que dependem da planilha original. Cada item abaixo está modelado de forma configurável e aguarda definição da área de negócio.
+O sistema **não inventa** regras de negócio. Cada item abaixo está modelado de forma configurável e aguarda definição da área de negócio. Atualizado após o recebimento do modelo real da planilha (turma "SAFEE T61 - Prova 21/01/26").
 
 | # | Pendência | Onde impacta | Como está hoje |
 |---|---|---|---|
-| 1 | Definição de **contratado** (pagamento confirmado ≠ contratação) | Indicadores, funil | Categoria `hired` existe; nenhum status mapeado para ela |
-| 2 | Quais status significam **aprovado**, **reprovado**, **desistente** e **em andamento** | Indicadores, ranking | Tabela `process_statuses` + `status_mappings`; valor sem mapeamento fica `unmapped` |
-| 3 | Etapas reais do **funil** | Funil | Tabela `funnel_stages` com flag `is_provisional` |
-| 4 | Lista oficial de **motivos de insucesso** | Gráficos de insucesso | Tabelas `loss_reasons` + `loss_reason_mappings` |
-| 5 | Fórmula do **tempo médio de contratação** (de qual data até qual) | Indicador executivo | Não calculado |
-| 6 | A planilha mensal é **snapshot completo** ou **só novidades do mês**? | Importação, histórico | A definir antes da Fase 4 |
-| 7 | **Chave de unicidade** da candidatura (o "ID do registro" é estável entre meses?) | Deduplicação | Índice em (agência, ID do registro), sem restrição de unicidade |
-| 8 | Como **identificar a agência** de cada arquivo (nome do arquivo, pasta, célula, remetente) | Importação | A definir |
-| 9 | **Regional** e **sub-representante** são atributos da agência ou da candidatura? | Modelo, filtros | Guardados na candidatura (valor bruto + normalizado) |
-| 10 | Significado de **programa de relacionamento**, **origem do cadastro**, **avaliação comercial** e **processo pausado** | Perfil do candidato | Guardados como texto bruto, sem interpretação |
-| 11 | Tratamento de linhas **sem CPF** ou com **CPF inválido** | Deduplicação | A definir (rejeitar ou fila de revisão) |
-| 12 | Denominador de cada **taxa** (aprovação, contratação, reprovação, desistência) | Indicadores | Tabela `metric_definitions` com flag `is_validated` |
+| 1 | **Significado de cada código de status** da planilha: PAGA, AGUA, REPRC, CANC, ENVIA, ENTRE (e futuros) | Todos os indicadores | Cada código entra como "não classificado". O administrador classifica em Administração > Status e catálogos (aprovado, reprovado, contratado, desistência, em andamento). Nada é presumido — inclusive "PAGA" não é tratado como contratação automaticamente |
+| 2 | Definição de **contratado** (pagamento confirmado ≠ contratação, conforme o briefing) | Indicadores, funil | Depende da classificação do item 1 |
+| 3 | Etapas reais do **funil** e a etapa de cada status | Funil | Seis etapas ilustrativas do briefing, marcadas como "Ilustrativa"; editáveis |
+| 4 | **Fórmulas das taxas** (numerador e denominador) | Indicadores | Provisório: classificações relevantes sobre o total de candidaturas classificadas. Editável e marcado "Provisória" até validação |
+| 5 | **Tempo médio de contratação** (de qual data até qual) | Indicador executivo | Não calculado; exibido como pendente |
+| 6 | **Motivos de insucesso**: a planilha não tem essa coluna | Gráfico de insucesso | O painel usa os status classificados como reprovação/desistência |
+| 7 | **Chave da candidatura**: o "ID" da planilha é único e estável entre reenvios? | Deduplicação | A candidatura é localizada pelo ID; reenvio da mesma turma atualiza em vez de duplicar |
+| 8 | **Identificação do candidato** sem CPF | Deduplicação de pessoas | Pelo nome normalizado (sem acentos, maiúsculas ou espaços extras). Homônimos seriam unidos — pendente decidir se a planilha passará a trazer CPF ou outro identificador |
+| 9 | **Agências**: "AVANTI" e "AVANTI CUIABA" (e casos similares) são a mesma agência? | Ranking | Tratadas como agências distintas, criadas automaticamente na importação |
+| 10 | A planilha de cada turma é **snapshot completo** (todos os candidatos com status atual) ou parcial? | Histórico | Tratada como snapshot: cada reenvio atualiza status e registra a mudança no histórico. Candidatos ausentes em um reenvio não são alterados |
+| 11 | Significado de **Programa Relacionamento** (Integral, Básico) e **SUSEP Ativa?** no processo | Análise de perfil | Usados apenas como dimensões descritivas |
+| 12 | Linhas com **dados faltando** | Importação | ID, Agência e Nome obrigatórios (linha rejeitada sem eles); status vazio e data inválida geram aviso |
 | 13 | **Política de retenção** dos dados pessoais (LGPD) | Banco, backups | A definir |
-| 14 | Dicionário de dados definitivo (colunas da planilha) | Modelo, importação | Campos da seção 5.3 do briefing; colunas extras preservadas em `raw_payload` |
-| 15 | Identidade visual: imagem institucional de referência não foi recebida | Design system | Paleta da seção 3.1 do briefing |
+| 14 | **Hospedagem definitiva**: o Render (EUA, plano gratuito) serve para validação; dados reais em produção dependem de aprovação | Infraestrutura | Ver ADR 0003 |
+| 15 | Campos do briefing ausentes no modelo (CPF, contato, escolaridade, renda, experiências, avaliação comercial) | CRM, análise de perfil | Estrutura do banco pronta para recebê-los; telas mostram apenas o que a planilha traz |

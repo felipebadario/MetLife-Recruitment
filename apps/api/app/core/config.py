@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parents[2]
@@ -42,8 +43,23 @@ class Settings(BaseSettings):
 
     demo_mode: bool = True
 
+    # Primeiro administrador, criado na inicialização se ainda não houver nenhum usuário.
+    # Útil em hospedagens sem terminal (ex.: Render). Depois do primeiro acesso, troque a senha.
+    initial_admin_email: str = ""
+    initial_admin_password: str = ""
+    initial_admin_name: str = "Administrador"
+
     # Build do frontend servido pelo backend em produção
     web_dist_dir: Path = REPO_DIR / "apps" / "web" / "dist"
+
+    @field_validator("database_url")
+    @classmethod
+    def _driver(cls, value: str) -> str:
+        """Provedores entregam postgres:// ou postgresql://; o SQLAlchemy usa o driver psycopg."""
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @property
     def is_sqlite(self) -> bool:

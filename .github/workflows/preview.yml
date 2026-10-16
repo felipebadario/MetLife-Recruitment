@@ -2,9 +2,9 @@ name: Pré-visualização
 
 # Gera o frontend em modo de pré-visualização (API simulada no navegador, apenas
 # dados fictícios) e guarda o resultado na branch `preview-dist`, de onde é publicado.
+# Desde a Fase 2 a validação é feita no Render (sistema completo). Esta pré-visualização
+# sem servidor cobre só a Fase 1 e fica disponível apenas sob demanda.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

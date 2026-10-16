@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONType, str_enum, utc_now
@@ -63,6 +63,12 @@ class ImportBatch(Base):
         ForeignKey("agencies.id", ondelete="SET NULL"), index=True
     )
     reference_period: Mapped[str | None] = mapped_column(String(7))  # AAAA-MM
+    # Título da planilha e a turma/prova identificada nele
+    sheet_title: Mapped[str | None] = mapped_column(String(255))
+    cohort_name: Mapped[str | None] = mapped_column(String(120))
+    exam_date: Mapped[date | None] = mapped_column(Date)
+    # Arquivo original, guardado para reprocessamento controlado
+    file_content: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
     template_version: Mapped[str | None] = mapped_column(String(20))
 
     received_at: Mapped[datetime] = mapped_column(

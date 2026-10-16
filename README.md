@@ -2,14 +2,32 @@
 
 Plataforma interna para consolidar as planilhas mensais das 23 agências parceiras de recrutamento de corretores, acompanhar candidatos e candidaturas e medir a performance de cada agência.
 
-> **Status:** Fase 1 (Foundation) concluída: estrutura do projeto, banco de dados, autenticação com perfis, auditoria, design system e layout principal. Veja o [plano de fases](docs/roadmap.md) e as [regras pendentes de validação](docs/pending-validations.md).
+> **Status:** Fases 1 a 4 entregues: autenticação e perfis, importação da planilha da turma, CRM de candidatos, catálogos configuráveis e dashboard de performance. Deploy no Render. Veja o [plano de fases](docs/roadmap.md) e as [regras pendentes de validação](docs/pending-validations.md).
+
+## Publicar no Render
+
+1. No [Render](https://dashboard.render.com), escolha **New > Blueprint** e conecte este repositório.
+2. O Render lê o `render.yaml` e cria o serviço web e o banco PostgreSQL.
+3. Preencha **INITIAL_ADMIN_EMAIL** e **INITIAL_ADMIN_PASSWORD** (mínimo de 10 caracteres, com letras e números). Esse usuário é criado no primeiro início, e só se ainda não houver nenhum usuário.
+4. Aguarde o deploy (alguns minutos) e acesse a URL `https://<nome>.onrender.com`.
+5. Entre com o administrador e troque a senha pelo menu do usuário.
+
+No plano gratuito, o serviço hiberna após um período sem uso; o primeiro acesso depois disso leva cerca de um minuto. Veja a [ADR 0003](docs/adr/0003-modelo-real-e-render.md) sobre limites e cuidados com dados reais.
+
+## Como validar com a planilha
+
+1. Em **Administração > Importações**, envie a planilha da turma (.xlsx) ou baixe a **planilha fictícia de teste** no mesmo modelo.
+2. Em **Administração > Status e catálogos**, classifique cada código de status (PAGA, AGUA, REPRC...) e associe-o a uma etapa do funil.
+3. Abra **Performance** e **Candidatos**: os indicadores e filtros já refletem a classificação.
+
+Para trocar a base de teste pela real, use **Apagar dados** no fim da página de Importações (mantém usuários e a classificação dos status).
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
 | Backend | Python 3.11+, FastAPI, SQLAlchemy 2, Alembic |
-| Banco | SQLite (padrão, zero infraestrutura) — pronto para PostgreSQL via `DATABASE_URL` |
+| Banco | SQLite local (zero infraestrutura) ou PostgreSQL (Render) via `DATABASE_URL` |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, TanStack Query, React Router |
 | Autenticação | Usuários locais, senha com scrypt, sessão em cookie httpOnly |
 
@@ -62,6 +80,13 @@ npm run dev
 ```
 
 Acesse http://localhost:5173. As chamadas `/api` são encaminhadas ao backend.
+
+### Base de demonstração (opcional, só dados fictícios)
+
+```bash
+python -m app.cli seed-demo                      # importa 8 turmas fictícias
+python -m app.cli demo-spreadsheet teste.xlsx    # gera uma planilha fictícia no modelo da turma
+```
 
 ### Testes
 

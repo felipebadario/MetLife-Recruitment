@@ -1,4 +1,4 @@
-import { Cable, FileSpreadsheet, ListChecks } from "lucide-react";
+import { Cable } from "lucide-react";
 import { Navigate, Outlet, createBrowserRouter, createHashRouter, type RouteObject } from "react-router";
 
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
@@ -11,6 +11,8 @@ import { LoginPage } from "@/pages/LoginPage";
 import { PerformancePage } from "@/pages/PerformancePage";
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { AuditPage } from "@/pages/admin/AuditPage";
+import { CatalogsPage } from "@/pages/admin/CatalogsPage";
+import { ImportsPage } from "@/pages/admin/ImportsPage";
 import { PlannedSection } from "@/pages/admin/PlannedSection";
 import { UsersPage } from "@/pages/admin/UsersPage";
 
@@ -74,30 +76,8 @@ const routes: RouteObject[] = [
               { index: true, element: <Navigate to="usuarios" replace /> },
               { path: "usuarios", element: <UsersPage /> },
               { path: "auditoria", element: <AuditPage /> },
-              {
-                path: "importacoes",
-                element: (
-                  <PlannedSection
-                    icon={FileSpreadsheet}
-                    title="Importações"
-                    description="Upload das planilhas mensais e histórico de cada arquivo processado."
-                    emptyTitle="Nenhuma planilha importada"
-                    emptyDescription="O envio de planilhas XLSX fica disponível quando o modelo original da planilha for validado."
-                  />
-                ),
-              },
-              {
-                path: "catalogos",
-                element: (
-                  <PlannedSection
-                    icon={ListChecks}
-                    title="Status e catálogos"
-                    description="Como os valores da planilha são traduzidos em status, etapas do funil e motivos de insucesso."
-                    emptyTitle="Nenhum status configurado"
-                    emptyDescription="Os status oficiais dependem da planilha original. Até lá, nenhum status é inventado pelo sistema."
-                  />
-                ),
-              },
+              { path: "importacoes", element: <ImportsPage /> },
+              { path: "catalogos", element: <CatalogsPage /> },
               {
                 path: "integracoes",
                 element: (

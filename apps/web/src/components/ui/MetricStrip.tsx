@@ -7,6 +7,11 @@ export interface Metric {
   value: number | null;
   /** Indicador positivo (ex.: contratações) ganha o marcador verde. */
   positive?: boolean;
+  /** Formatação do valor (padrão: número inteiro). */
+  format?: (value: number) => string;
+  /** Linha de apoio abaixo do valor (base de cálculo, alerta de amostra). */
+  caption?: string;
+  captionTone?: "muted" | "warning";
 }
 
 /**
@@ -36,10 +41,20 @@ export function MetricStrip({ metrics, loading = false }: { metrics: Metric[]; l
                     metric.value == null ? "text-line-strong" : "text-ink",
                   )}
                 >
-                  {formatNumber(metric.value)}
+                  {metric.value == null ? "—" : metric.format ? metric.format(metric.value) : formatNumber(metric.value)}
                 </span>
               )}
             </dd>
+            {metric.caption && !loading && (
+              <dd
+                className={cn(
+                  "mt-1 text-xs",
+                  metric.captionTone === "warning" ? "text-warning-700" : "text-muted",
+                )}
+              >
+                {metric.caption}
+              </dd>
+            )}
             {metric.positive && (
               <span className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-green-500/70" aria-hidden />
             )}

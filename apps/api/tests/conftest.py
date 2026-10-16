@@ -12,7 +12,9 @@ _TMP = Path(tempfile.mkdtemp(prefix="mrc-tests-"))
 os.environ.update(
     {
         "ENVIRONMENT": "test",
-        "DATABASE_URL": f"sqlite:///{(_TMP / 'test.db').as_posix()}",
+        # Em CI, TEST_DATABASE_URL roda a mesma suíte contra PostgreSQL.
+        "DATABASE_URL": os.environ.get("TEST_DATABASE_URL")
+        or f"sqlite:///{(_TMP / 'test.db').as_posix()}",
         "DATA_DIR": str(_TMP),
         "SECRET_KEY": secrets.token_urlsafe(48),
         "FIELD_ENCRYPTION_KEY": "x" * 43 + "=",  # substituída abaixo por uma chave Fernet válida
@@ -31,8 +33,12 @@ from sqlalchemy import delete  # noqa: E402
 
 from app.core.config import API_DIR  # noqa: E402
 from app.core.security import hash_password, utcnow  # noqa: E402
+from app.db.base import Base  # noqa: E402
 from app.db.session import get_sessionmaker  # noqa: E402
-from app.models import AuditLog, User, UserRole  # noqa: E402
+from app.models import User, UserRole  # noqa: E402
+
+# Catálogos semeados pelas migrações: preservados entre testes.
+_KEEP_TABLES = {"metric_definitions", "funnel_stages"}
 
 PASSWORD = "SenhaForte123"
 
@@ -49,8 +55,9 @@ def _database() -> None:
 def _clean_tables() -> Iterator[None]:
     yield
     with get_sessionmaker()() as db:
-        db.execute(delete(AuditLog))
-        db.execute(delete(User))
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name not in _KEEP_TABLES:
+                db.execute(delete(table))
         db.commit()
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -9,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
 from app.core.middleware import CSRFMiddleware, SecurityHeadersMiddleware
-from app.routers import admin, auth, meta
+from app.routers import admin, auth, candidates, catalogs, imports, meta, performance
 
 
 def _mount_frontend(app: FastAPI, dist: Path) -> None:
@@ -29,6 +31,14 @@ def _mount_frontend(app: FastAPI, dist: Path) -> None:
         return FileResponse(index)
 
 
+@asynccontextmanager
+async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+    from app.services.bootstrap import ensure_initial_admin
+
+    ensure_initial_admin()
+    yield
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     missing = settings.missing_secrets()
@@ -40,6 +50,7 @@ def create_app() -> FastAPI:
         )
 
     app = FastAPI(
+        lifespan=_lifespan,
         title=settings.app_name,
         version=settings.app_version,
         # Documentação interativa apenas fora de produção
@@ -53,6 +64,10 @@ def create_app() -> FastAPI:
     app.include_router(meta.router)
     app.include_router(auth.router)
     app.include_router(admin.router)
+    app.include_router(candidates.router)
+    app.include_router(imports.router)
+    app.include_router(catalogs.router)
+    app.include_router(performance.router)
 
     _mount_frontend(app, settings.web_dist_dir)
     return app
