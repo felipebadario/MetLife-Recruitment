@@ -25,6 +25,15 @@ const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "brand" |
   "user.updated": { label: "Editou usuário", tone: "brand" },
   "user.password_reset": { label: "Redefiniu senha", tone: "brand" },
   "security.access_denied": { label: "Acesso negado", tone: "danger" },
+  "imports.uploaded": { label: "Enviou planilha", tone: "brand" },
+  "imports.reprocessed": { label: "Reprocessou planilha", tone: "brand" },
+  "imports.deleted": { label: "Excluiu planilha", tone: "warning" },
+  "imports.data_reset": { label: "Apagou os dados", tone: "danger" },
+  "catalog.status_updated": { label: "Classificou status", tone: "brand" },
+  "catalog.metric_updated": { label: "Alterou fórmula", tone: "brand" },
+  "candidates.exported": { label: "Exportou candidatos", tone: "neutral" },
+  "candidates.note_added": { label: "Registrou observação", tone: "neutral" },
+  "audit.purged": { label: "Limpeza da auditoria", tone: "neutral" },
 };
 
 const FILTERS = [
@@ -32,7 +41,17 @@ const FILTERS = [
   { value: "auth.", label: "Acessos" },
   { value: "user.", label: "Gestão de usuários" },
   { value: "security.", label: "Segurança" },
+  { value: "imports.", label: "Importações" },
+  { value: "catalog.", label: "Catálogos" },
+  { value: "candidates.", label: "Candidatos" },
+  { value: "audit.", label: "Limpeza da auditoria" },
 ];
+
+interface Retention {
+  access_retention_days: number;
+  retention_days: number;
+  last_purge_at: string | null;
+}
 
 function describe(log: AuditLog): string {
   if (!log.details) return "";
@@ -50,13 +69,22 @@ export function AuditPage() {
     placeholderData: keepPreviousData,
   });
 
+  const retention = useQuery({
+    queryKey: ["admin", "audit", "retention"],
+    queryFn: () => api.get<Retention>("/api/admin/audit-logs/retention"),
+  });
+
   const totalPages = logs.data ? Math.max(1, Math.ceil(logs.data.total / PAGE_SIZE)) : 1;
 
   return (
     <Panel>
       <PanelHeader
         title="Auditoria"
-        description="Registro permanente de acessos e ações relevantes. Não pode ser editado."
+        description={
+          retention.data
+            ? `Registro de acessos e ações relevantes, que não pode ser editado. Acessos (entradas, saídas e acessos negados) ficam ${retention.data.access_retention_days} dias; as demais ações, ${retention.data.retention_days} dias. A limpeza é automática${retention.data.last_purge_at ? ` (última em ${formatDateTime(retention.data.last_purge_at)})` : ""}.`
+            : "Registro de acessos e ações relevantes, que não pode ser editado."
+        }
         actions={
           <Select
             aria-label="Filtrar por tipo de ação"

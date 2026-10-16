@@ -42,7 +42,7 @@ npm run build                          # checagem de tipos + build
 - **Nada de dados reais no repositório** (ele é público): testes e demonstração usam só `app/importing/demo.py`. Nunca versione planilhas recebidas.
 - **Permissões checadas no backend** (`app/auth/permissions.py`): perfis `admin` (tudo), `operational` (tudo menos o menu Administração) e `viewer` (somente leitura de Candidatos).
 - Mudança de modelo exige migração Alembic nova (com `batch_alter_table` para funcionar no SQLite).
-- Toda ação administrativa relevante grava em `audit_logs` via `record_audit`.
+- Toda ação administrativa relevante grava em `audit_logs` via `record_audit`. Retenção automática (`purge_audit_logs`, na inicialização e a cada 24 h): acessos (`ACCESS_ACTIONS`) 90 dias, demais ações 365 dias; ajustável por `AUDIT_ACCESS_RETENTION_DAYS` e `AUDIT_RETENTION_DAYS`.
 - Interface: tokens de cor e tipografia em `apps/web/src/styles/index.css`; cores das categorias de resultado em `src/lib/outcomes.ts` (ordem fixa, validada para daltonismo). Textos em linguagem simples, sem caixa alta em rótulos.
 - Commits e PRs em português; o CI (`.github/workflows/ci.yml`) roda lint, testes em SQLite e PostgreSQL e o build do frontend.
 

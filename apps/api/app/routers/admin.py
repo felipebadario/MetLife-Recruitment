@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
+from app.core.config import get_settings
 from app.core.security import hash_password, utcnow
 from app.models import AuditLog, User, UserRole
 from app.schemas import (
@@ -19,7 +22,7 @@ from app.schemas import (
     UserOut,
     UserUpdateIn,
 )
-from app.services.audit import AuditAction, record_audit
+from app.services.audit import ACCESS_ACTIONS, AuditAction, record_audit
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -172,4 +175,25 @@ def list_audit_logs(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+class AuditRetentionOut(BaseModel):
+    access_retention_days: int
+    retention_days: int
+    access_actions: list[str]
+    last_purge_at: datetime | None
+
+
+@router.get("/audit-logs/retention", response_model=AuditRetentionOut)
+def audit_retention(_: AuditViewer, db: DbSession) -> AuditRetentionOut:
+    """Regra de retenção em vigor e data da última limpeza que removeu registros."""
+    settings = get_settings()
+    return AuditRetentionOut(
+        access_retention_days=settings.audit_access_retention_days,
+        retention_days=settings.audit_retention_days,
+        access_actions=list(ACCESS_ACTIONS),
+        last_purge_at=db.scalar(
+            select(func.max(AuditLog.created_at)).where(AuditLog.action == AuditAction.AUDIT_PURGED)
+        ),
     )

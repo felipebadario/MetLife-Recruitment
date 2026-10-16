@@ -9,7 +9,8 @@ from app.db.base import Base, JSONType, utc_now
 
 
 class AuditLog(Base):
-    """Trilha de auditoria append-only (a aplicação nunca altera nem apaga registros)."""
+    """Trilha de auditoria append-only: a aplicação nunca altera registros. A única exclusão
+    é a limpeza por prazo de retenção (app/services/audit.py, purge_audit_logs)."""
 
     __tablename__ = "audit_logs"
     __table_args__ = (Index("ix_audit_logs_entity", "entity_type", "entity_id"),)
