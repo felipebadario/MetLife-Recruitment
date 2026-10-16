@@ -13,10 +13,12 @@ class UserRole(str, enum.Enum):
     """Perfis de acesso.
 
     - admin: acesso total (Candidatos, Performance, Administração, exportação).
+    - operational: tudo, menos o menu Administração.
     - viewer: somente leitura da aba Candidatos, com dados pessoais mascarados.
     """
 
     ADMIN = "admin"
+    OPERATIONAL = "operational"
     VIEWER = "viewer"
 
 

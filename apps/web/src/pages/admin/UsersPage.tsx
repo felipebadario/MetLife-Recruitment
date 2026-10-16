@@ -19,6 +19,7 @@ const USERS_KEY = ["admin", "users"] as const;
 
 const ROLE_HINTS: Record<UserRole, string> = {
   admin: "Acesso total: candidatos, performance, administração e exportação.",
+  operational: "Candidatos e Performance completos, com exportação. Sem acesso ao menu Administração.",
   viewer: "Somente leitura da aba Candidatos, com CPF, e-mail e telefone mascarados.",
 };
 
@@ -89,7 +90,7 @@ export function UsersPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    <Badge tone={user.role === "admin" ? "brand" : "neutral"}>{ROLE_LABELS[user.role]}</Badge>
+                    <Badge tone={user.role === "admin" ? "brand" : user.role === "operational" ? "positive" : "neutral"}>{ROLE_LABELS[user.role]}</Badge>
                   </td>
                   <td className="px-5 py-3">
                     {user.is_active ? (
@@ -129,6 +130,7 @@ function RoleSelect({ value, onChange, ...props }: { value: UserRole; onChange: 
   return (
     <Select {...props} value={value} onChange={(e) => onChange(e.target.value as UserRole)}>
       <option value="viewer">{ROLE_LABELS.viewer}</option>
+      <option value="operational">{ROLE_LABELS.operational}</option>
       <option value="admin">{ROLE_LABELS.admin}</option>
     </Select>
   );
@@ -203,7 +205,7 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
 function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: user.name, role: user.role, is_active: user.is_active });
+  const [form, setForm] = useState({ name: user.name, email: user.email, role: user.role, is_active: user.is_active });
   const mutation = useMutation({
     mutationFn: () => api.patch<User>(`/api/admin/users/${user.id}`, form),
     onSuccess: () => {
@@ -214,7 +216,7 @@ function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) 
 
   return (
     <DialogRoot open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Editar usuário" description={user.email}>
+      <DialogContent title="Editar usuário" description={user.name}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -224,6 +226,18 @@ function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) 
         >
           <Field label="Nome">
             {(p) => <Input {...p} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}
+          </Field>
+          <Field label="E-mail de acesso" hint="É o e-mail usado para entrar na plataforma.">
+            {(p) => (
+              <Input
+                {...p}
+                type="email"
+                required
+                autoComplete="off"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            )}
           </Field>
           <Field label="Perfil" hint={ROLE_HINTS[form.role]}>
             {(p) => <RoleSelect id={p.id} value={form.role} onChange={(role) => setForm({ ...form, role })} />}

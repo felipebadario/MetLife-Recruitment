@@ -38,6 +38,7 @@ Em produção, **um único processo** serve a API e o frontend compilado. Decis�
 | Perfil | Acesso |
 |---|---|
 | **Administrador** (`admin`) | Tudo: Candidatos, Performance, Administração e exportação. Vê dados pessoais completos. |
+| **Operacional** (`operational`) | Candidatos e Performance completos, com exportação e apresentação. Sem acesso ao menu Administração. |
 | **Visualizador** (`viewer`) | Somente leitura da aba Candidatos. CPF, e-mail e telefone mascarados. Sem exportação. |
 
 As permissões são verificadas no backend; o frontend apenas esconde o que o perfil não acessa.

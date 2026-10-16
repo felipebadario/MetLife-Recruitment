@@ -1,130 +1,32 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, BarChart3, FileSpreadsheet } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { BarChart3, FileSpreadsheet, Presentation, Search, X } from "lucide-react";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 
 import { CompositionBar, HorizontalBars, OutcomeLegend, StackedColumns } from "@/components/charts/charts";
 import { FilterBar } from "@/components/filters/FilterBar";
+import {
+  RankingTable,
+  agencyRows,
+  monthLabel,
+  outcomeBars,
+  representativeRows,
+  statusBars,
+} from "@/components/performance/indicators";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Select } from "@/components/ui/Field";
+import { Input, Select } from "@/components/ui/Field";
 import { MetricStrip, type Metric } from "@/components/ui/MetricStrip";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError, withQuery } from "@/lib/api";
 import { filtersToQuery, useFilters } from "@/lib/filters";
-import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER, formatRate } from "@/lib/outcomes";
+import { OUTCOME_COLORS, OUTCOME_LABELS, formatRate } from "@/lib/outcomes";
 import type { Dashboard, FilterOptions, GroupStats } from "@/lib/types";
+import type { Filters } from "@/lib/filters";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
-
-const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-function monthLabel(period: string): string {
-  const [year, month] = period.split("-");
-  return `${MONTHS[Number(month) - 1]}/${year.slice(2)}`;
-}
-
-function SampleTag({ base, min }: { base: number; min: number }) {
-  return (
-    <span
-      className="ml-1.5 rounded-full bg-warning-50 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-warning-700"
-      title={`Taxa calculada sobre ${base} candidaturas classificadas (menos de ${min}). Interprete com cautela.`}
-    >
-      amostra pequena
-    </span>
-  );
-}
-
-type RankKey = "name" | "total" | "approved" | "rejected" | "hired" | "withdrawn" | "approval_rate" | "hiring_rate" | "withdrawal_rate";
-
-function rankValue(row: Dashboard["agencies"][number], key: RankKey): number | string {
-  switch (key) {
-    case "name":
-      return row.name;
-    case "total":
-      return row.total;
-    case "approved":
-    case "rejected":
-    case "hired":
-    case "withdrawn":
-      return row.by_outcome[key];
-    default:
-      return row.rates[key] ?? -1;
-  }
-}
-
-function AgencyRanking({ data }: { data: Dashboard }) {
-  const [sort, setSort] = useState<{ key: RankKey; desc: boolean }>({ key: "total", desc: true });
-  const rows = useMemo(() => {
-    const sorted = [...data.agencies].sort((a, b) => {
-      const va = rankValue(a, sort.key);
-      const vb = rankValue(b, sort.key);
-      const cmp = typeof va === "string" ? va.localeCompare(String(vb)) : va - (vb as number);
-      return sort.desc ? -cmp : cmp;
-    });
-    return sorted;
-  }, [data.agencies, sort]);
-
-  const columns: { key: RankKey; label: string; rate?: boolean }[] = [
-    { key: "name", label: "Agência" },
-    { key: "total", label: "Candidaturas" },
-    { key: "approved", label: "Aprovados" },
-    { key: "rejected", label: "Reprovados" },
-    { key: "hired", label: "Contratados" },
-    { key: "withdrawn", label: "Desistências" },
-    { key: "approval_rate", label: "Taxa de aprovação", rate: true },
-    { key: "hiring_rate", label: "Taxa de contratação", rate: true },
-    { key: "withdrawal_rate", label: "Taxa de desistência", rate: true },
-  ];
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] text-left text-[13px]">
-        <thead className="bg-surface/60 text-muted">
-          <tr>
-            {columns.map((c) => (
-              <th key={c.key} scope="col" className={cn("px-3 py-2.5 font-semibold whitespace-nowrap", c.key !== "name" && "text-right")}>
-                <button
-                  className="inline-flex items-center gap-1 hover:text-ink"
-                  onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : c.key !== "name" }))}
-                >
-                  {c.label}
-                  {sort.key === c.key && (sort.desc ? <ArrowDown className="size-3.5 text-brand-500" /> : <ArrowUp className="size-3.5 text-brand-500" />)}
-                </button>
-              </th>
-            ))}
-            <th scope="col" className="w-40 px-3 py-2.5 font-semibold">
-              Composição
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {rows.map((row) => (
-            <tr key={row.agency_id} className="hover:bg-surface/50">
-              <td className="px-3 py-2.5 font-semibold text-ink">{row.name}</td>
-              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.total)}</td>
-              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.approved)}</td>
-              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.rejected)}</td>
-              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.hired)}</td>
-              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.withdrawn)}</td>
-              {(["approval_rate", "hiring_rate", "withdrawal_rate"] as const).map((code, i) => (
-                <td key={code} className="tabular px-3 py-2.5 text-right whitespace-nowrap text-ink">
-                  {formatRate(row.rates[code])}
-                  {i === 0 && row.low_sample && row.rate_base > 0 && <SampleTag base={row.rate_base} min={data.min_sample_size} />}
-                </td>
-              ))}
-              <td className="px-3 py-2.5">
-                <CompositionBar byOutcome={row.by_outcome} label={row.name} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 function GroupTable({
   groups,
@@ -236,8 +138,131 @@ function LossBreakdown({ data }: { data: Dashboard }) {
   );
 }
 
+const PAGE_ROWS = 15;
+
+function AgencySelect({
+  data,
+  value,
+  onChange,
+  label = "Agência",
+}: {
+  data: Dashboard;
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+}) {
+  return (
+    <Select aria-label={label} className="h-9 w-full max-w-xs text-[13px]" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Todas as agências</option>
+      {data.agencies.map((a) => (
+        <option key={a.agency_id} value={a.agency_id}>
+          {a.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+function RepresentativePanel({ data, onSelect }: { data: Dashboard; onSelect: (patch: Partial<Filters>) => void }) {
+  const [agencyId, setAgencyId] = useState("");
+  const [term, setTerm] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const all = representativeRows(data, agencyId ? Number(agencyId) : null).filter(
+    (r) => !term || r.name.toLowerCase().includes(term.toLowerCase()),
+  );
+  const rows = showAll ? all : all.slice(0, PAGE_ROWS);
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Desempenho por representante"
+        description="Resultado de cada sub-representante dentro da sua agência. Clique em uma linha para ver o dashboard só daquele representante."
+        actions={<OutcomeLegend />}
+      />
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
+        <AgencySelect data={data} value={agencyId} onChange={setAgencyId} />
+        <div className="relative w-full sm:w-64">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+          <Input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Buscar representante"
+            aria-label="Buscar representante"
+            className="h-9 pl-9 text-[13px]"
+          />
+        </div>
+        <span className="text-[13px] text-muted">{all.length === 1 ? "1 representante" : `${formatNumber(all.length)} representantes`}</span>
+      </div>
+      <div className="mt-3">
+        <RankingTable
+          rows={rows}
+          firstLabel="Representante"
+          showAgency
+          minSample={data.min_sample_size}
+          onSelect={(r) => onSelect({ sub_representative: [r.name], agency_id: [String(r.key.split(":")[0])] })}
+          selectLabel={(r) => `Ver o dashboard de ${r.name}`}
+        />
+      </div>
+      {all.length > PAGE_ROWS && (
+        <div className="border-t border-line px-5 py-2.5">
+          <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? "Mostrar menos" : `Mostrar todos (${formatNumber(all.length)})`}
+          </Button>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/** Resultado por classificação e por status, no total ou de uma agência específica. */
+function ScopedBreakdown({ data, onClassify }: { data: Dashboard; onClassify: () => void }) {
+  const [agencyId, setAgencyId] = useState("");
+  const agency = data.agencies.find((a) => String(a.agency_id) === agencyId);
+  const byOutcome = agency ? agency.by_outcome : data.totals.by_outcome;
+  const total = agency ? agency.total : data.totals.applications;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-medium text-ink">Ver resultado de:</span>
+        <AgencySelect data={data} value={agencyId} onChange={setAgencyId} label="Agência dos gráficos de resultado" />
+        {agency && <span className="text-[13px] text-muted">{formatNumber(agency.total)} candidaturas</span>}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader
+            title="Resultado por classificação"
+            description={agency ? `Candidaturas da agência ${agency.name} por classificação.` : "Candidaturas de todas as agências por classificação."}
+          />
+          <div className="p-5">
+            <HorizontalBars total={total} rows={outcomeBars(byOutcome)} />
+            {byOutcome.unmapped > 0 && (
+              <p className="mt-3 text-xs text-muted">
+                Há status sem classificação.{" "}
+                <button type="button" className="font-medium text-brand-600 hover:underline" onClick={onClassify}>
+                  Classificar status
+                </button>
+              </p>
+            )}
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader
+            title="Distribuição por status VGCF"
+            description={agency ? `Status das candidaturas da agência ${agency.name}.` : "Status como vieram da planilha, com a classificação de cada um."}
+          />
+          <div className="p-5">
+            <HorizontalBars total={total} rows={statusBars(data, { agencyId: agency?.agency_id })} />
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
 export function PerformancePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { filters, setFilters, clear } = useFilters();
   const query = filtersToQuery({ ...filters, search: "" });
   const key = JSON.stringify(query);
@@ -281,8 +306,46 @@ export function PerformancePage() {
   return (
     <div className="flex flex-col gap-6">
       <Panel className="px-5 py-4">
-        <FilterBar filters={filters} options={options.data} onChange={setFilters} onClear={clear} />
+        <FilterBar
+          filters={filters}
+          options={options.data}
+          onChange={setFilters}
+          onClear={clear}
+          actions={
+            <Button size="sm" onClick={() => navigate(`/performance/apresentacao${location.search}`)} disabled={!data || empty}>
+              <Presentation className="size-4" aria-hidden />
+              Exportar apresentação
+            </Button>
+          }
+        />
       </Panel>
+
+      {(filters.agency_id.length === 1 || filters.sub_representative.length === 1) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-panel)] border border-brand-200 bg-brand-50 px-5 py-3 text-[13px] text-brand-800">
+          <span>
+            Visão individual:{" "}
+            <strong>
+              {[
+                filters.agency_id.length === 1 &&
+                  (options.data?.agencies.find((a) => String(a.id) === filters.agency_id[0])?.name ?? "agência"),
+                filters.sub_representative.length === 1 && filters.sub_representative[0],
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </strong>
+            . Todos os indicadores abaixo consideram só este recorte.
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setFilters({ agency_id: [], sub_representative: [] })}
+          >
+            <X className="size-3.5" aria-hidden />
+            Voltar à visão geral
+          </Button>
+        </div>
+      )}
 
       <MetricStrip
         loading={dashboard.isPending}
@@ -352,62 +415,21 @@ export function PerformancePage() {
           <Panel>
             <PanelHeader
               title="Ranking de agências"
-              description="Volumes absolutos ao lado das taxas, para não comparar agências só pelo tamanho. Clique no título de uma coluna para ordenar."
+              description="Volume por classificação ao lado das taxas, para não comparar agências só pelo tamanho. Clique no título de uma coluna para ordenar, ou em uma agência para ver só ela."
               actions={<OutcomeLegend />}
             />
-            <AgencyRanking data={data} />
+            <RankingTable
+              rows={agencyRows(data)}
+              firstLabel="Agência"
+              minSample={data.min_sample_size}
+              onSelect={(r) => setFilters({ agency_id: [r.key], sub_representative: [] })}
+              selectLabel={(r) => `Ver o dashboard da agência ${r.name}`}
+            />
           </Panel>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Panel>
-              <PanelHeader
-                title="Resultado por classificação"
-                description="Candidaturas agrupadas pela classificação de cada status VGCF."
-              />
-              <div className="p-5">
-                <HorizontalBars
-                  total={data.totals.applications}
-                  rows={OUTCOME_ORDER.filter((o) => data.totals.by_outcome[o] > 0).map((o) => ({
-                    key: o,
-                    label: OUTCOME_LABELS[o],
-                    value: data.totals.by_outcome[o],
-                    color: OUTCOME_COLORS[o],
-                  }))}
-                />
-                {data.totals.by_outcome.unmapped > 0 && (
-                  <p className="mt-3 text-xs text-muted">
-                    Há status sem classificação.{" "}
-                    <button
-                      type="button"
-                      className="font-medium text-brand-600 hover:underline"
-                      onClick={() => navigate("/administracao/catalogos")}
-                    >
-                      Classificar status
-                    </button>
-                  </p>
-                )}
-              </div>
-            </Panel>
+          <ScopedBreakdown data={data} onClassify={() => navigate("/administracao/catalogos")} />
 
-            <Panel>
-              <PanelHeader title="Distribuição por status" description="Status como vieram da planilha, com a classificação de cada um." />
-              <div className="p-5">
-                <HorizontalBars
-                  total={data.totals.applications}
-                  rows={data.statuses.map((s) => ({
-                    key: String(s.status_id),
-                    label: (
-                      <>
-                        {s.label} <span className="text-muted">({OUTCOME_LABELS[s.outcome]})</span>
-                      </>
-                    ),
-                    value: s.count,
-                    color: OUTCOME_COLORS[s.outcome],
-                  }))}
-                />
-              </div>
-            </Panel>
-          </div>
+          <RepresentativePanel data={data} onSelect={setFilters} />
 
           <Panel>
             <PanelHeader

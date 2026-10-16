@@ -37,12 +37,14 @@ OUTCOMES = [o.value for o in ProcessOutcome]
 # Grupos de perfil com menos candidaturas que isto não têm taxas exibidas (evita conclusões
 # sobre poucos casos e reduz o risco de reidentificação).
 PROFILE_MIN_GROUP = 5
+NO_REP = "Não informado"
 
 
 @dataclass
 class Cell:
     agency_id: int
     regional: str | None
+    sub_representative: str | None
     status_id: int | None
     outcome: str
     cohort: str | None
@@ -81,6 +83,7 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     columns = (
         Application.agency_id,
         Application.regional_norm,
+        Application.sub_representative_norm,
         Application.status_id,
         OUTCOME_EXPR,
         Application.cohort_name,
@@ -97,10 +100,10 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     )
     cells = [
         Cell(
-            agency_id=r[0], regional=r[1], status_id=r[2],
-            outcome=r[3].value if isinstance(r[3], ProcessOutcome) else str(r[3]),
-            cohort=r[4], exam_date=r[5], registered=r[6],
-            susep=r[7], program=r[8], count=r[9],
+            agency_id=r[0], regional=r[1], sub_representative=r[2], status_id=r[3],
+            outcome=r[4].value if isinstance(r[4], ProcessOutcome) else str(r[4]),
+            cohort=r[5], exam_date=r[6], registered=r[7],
+            susep=r[8], program=r[9], count=r[10],
         )
         for r in db.execute(filters.apply(query))
     ]
@@ -120,6 +123,8 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
     by_agency: dict[int, dict[str, int]] = defaultdict(_empty)
     by_status: dict[int | None, int] = defaultdict(int)
     by_agency_status: dict[tuple[int, int | None], int] = defaultdict(int)
+    by_rep: dict[tuple[int, str], dict[str, int]] = defaultdict(_empty)
+    by_rep_status: dict[tuple[int, str, int | None], int] = defaultdict(int)
     by_month: dict[str, dict[str, int]] = defaultdict(_empty)
     by_cohort: dict[str, dict[str, int]] = defaultdict(_empty)
     cohort_dates: dict[str, date | None] = {}
@@ -132,6 +137,9 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         by_agency[c.agency_id][c.outcome] += c.count
         by_status[c.status_id] += c.count
         by_agency_status[(c.agency_id, c.status_id)] += c.count
+        rep = c.sub_representative or NO_REP
+        by_rep[(c.agency_id, rep)][c.outcome] += c.count
+        by_rep_status[(c.agency_id, rep, c.status_id)] += c.count
         if c.registered:
             by_month[c.registered.strftime("%Y-%m")][c.outcome] += c.count
         if c.cohort:
@@ -222,6 +230,18 @@ def dashboard(_: Analyst, db: DbSession, filters: Filters) -> dict:
         "agency_status": [
             {"agency_id": aid, "status_id": sid, "count": count}
             for (aid, sid), count in by_agency_status.items()
+        ],
+        # Desempenho de cada sub-representante dentro de cada agência.
+        "representatives": sorted(
+            (
+                {"agency_id": aid, "agency_name": agencies.get(aid, "?"), "name": rep, **group_row(by_outcome)}
+                for (aid, rep), by_outcome in by_rep.items()
+            ),
+            key=lambda r: (-r["total"], r["name"]),
+        ),
+        "representative_status": [
+            {"agency_id": aid, "name": rep, "status_id": sid, "count": count}
+            for (aid, rep, sid), count in by_rep_status.items()
         ],
         "timeline": [
             {"period": period, **group_row(by_outcome)} for period, by_outcome in sorted(by_month.items())

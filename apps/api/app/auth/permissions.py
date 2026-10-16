@@ -27,6 +27,16 @@ class Permission(str, Enum):
 
 ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
     UserRole.ADMIN: frozenset(Permission),
+    # Operacional: Candidatos e Performance completos, sem o menu Administração.
+    UserRole.OPERATIONAL: frozenset(
+        {
+            Permission.CANDIDATES_VIEW,
+            Permission.CANDIDATES_VIEW_SENSITIVE,
+            Permission.CANDIDATES_EXPORT,
+            Permission.CANDIDATES_NOTES_WRITE,
+            Permission.PERFORMANCE_VIEW,
+        }
+    ),
     UserRole.VIEWER: frozenset({Permission.CANDIDATES_VIEW}),
 }
 

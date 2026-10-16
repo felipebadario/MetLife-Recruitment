@@ -104,3 +104,27 @@
     transition-duration: 1ms !important;
   }
 }
+
+/* Apresentação exportável: uma página 16:9 (tamanho de slide) por tela. */
+@media print {
+  @page {
+    size: 13.333in 7.5in;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .slide {
+    box-shadow: none !important;
+    break-after: page;
+    break-inside: avoid;
+  }
+}

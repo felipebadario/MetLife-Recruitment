@@ -198,10 +198,23 @@ def filter_options(_: Viewer, db: DbSession) -> dict:
         .group_by(Application.cohort_name)
         .order_by(func.max(Application.exam_date).desc())
     )
+    sub_representatives = db.execute(
+        select(Application.sub_representative_norm, Agency.name, func.count(Application.id))
+        .join(Agency, Agency.id == Application.agency_id)
+        .where(Application.sub_representative_norm.is_not(None))
+        .group_by(Application.sub_representative_norm, Agency.name)
+        .order_by(Application.sub_representative_norm, Agency.name)
+    )
+    reps: dict[str, dict] = {}
+    for name, agency, count in sub_representatives:
+        item = reps.setdefault(name, {"value": name, "agencies": [], "count": 0})
+        item["agencies"].append(agency)
+        item["count"] += count
     bounds = db.execute(select(func.min(Application.registered_at), func.max(Application.registered_at))).one()
     return {
         "agencies": [{"id": i, "name": n, "count": c} for i, n, c in agencies],
         "regionals": distinct_values(Application.regional_norm),
+        "sub_representatives": list(reps.values()),
         "statuses": [
             {"id": i, "label": label, "outcome": o.value if o else "unmapped", "count": c}
             for i, label, o, c in statuses

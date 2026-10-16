@@ -1,30 +1,26 @@
 import { cn } from "@/lib/utils";
 
-/** Marca do produto (não reproduz o logotipo da MetLife). */
+/** Símbolo da MetLife (redesenhado em vetor a partir do logotipo oficial). */
+export function MetLifeSymbol({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 80" className={className} aria-hidden>
+      <path d="M0 2Q31 6 50 31V80H0Z" fill="#0090DA" />
+      <path d="M50 31V80H17Q41 61 50 31Z" fill="#0061A0" />
+      <path d="M100 2Q69 6 50 31V80H100Z" fill="#A4CE4E" />
+    </svg>
+  );
+}
+
+/** Logotipo da MetLife com o nome do produto. */
 export function BrandMark({ inverted = false, className }: { inverted?: boolean; className?: string }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <svg viewBox="0 0 32 32" className="size-8 shrink-0" aria-hidden>
-        <rect width="32" height="32" rx="8" fill={inverted ? "#ffffff" : "#0061A0"} />
-        <circle cx="12" cy="12" r="4" fill={inverted ? "#0061A0" : "#ffffff"} />
-        <path
-          d="M5 25c0-4 3-7 7-7s7 3 7 7"
-          fill="none"
-          stroke={inverted ? "#0061A0" : "#ffffff"}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M19 15l3 3 6-7"
-          fill="none"
-          stroke="#A4CE4E"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <MetLifeSymbol className="h-7 w-[35px] shrink-0" />
       <div className="leading-tight">
-        <div className={cn("text-[15px] font-bold tracking-tight", inverted ? "text-white" : "text-ink")}>
+        <div
+          className={cn("text-[19px] font-extrabold tracking-[-0.02em]", inverted ? "text-white" : "text-[#1f1f1f]")}
+          aria-label="MetLife"
+        >
           MetLife
         </div>
         <div className={cn("text-xs", inverted ? "text-brand-100" : "text-muted")}>Recruitment CRM</div>

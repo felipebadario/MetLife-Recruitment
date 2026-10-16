@@ -83,7 +83,7 @@ def update_user(
     changes = payload.model_dump(exclude_unset=True)
 
     losing_admin = user.role == UserRole.ADMIN and user.is_active and (
-        changes.get("role") == UserRole.VIEWER or changes.get("is_active") is False
+        changes.get("role") not in (None, UserRole.ADMIN) or changes.get("is_active") is False
     )
     if losing_admin and _active_admins(db) <= 1:
         raise HTTPException(
@@ -96,10 +96,18 @@ def update_user(
             detail="Você não pode desativar o próprio acesso.",
         )
 
+    new_email = changes.get("email")
+    if new_email and new_email != user.email and db.scalar(select(User).where(User.email == new_email)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Já existe um usuário com este e-mail."
+        )
+
     applied: dict[str, object] = {}
     for field, value in changes.items():
         if value is None or getattr(user, field) == value:
             continue
+        if field == "email":
+            applied["previous_email"] = user.email
         setattr(user, field, value)
         applied[field] = value.value if isinstance(value, UserRole) else value
 
