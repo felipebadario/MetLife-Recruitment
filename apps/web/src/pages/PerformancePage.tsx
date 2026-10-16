@@ -81,11 +81,11 @@ function AgencyRanking({ data }: { data: Dashboard }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[980px] text-left text-[13px]">
+      <table className="w-full min-w-[920px] text-left text-[13px]">
         <thead className="bg-surface/60 text-muted">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} scope="col" className={cn("px-4 py-2.5 font-semibold whitespace-nowrap", c.key !== "name" && "text-right")}>
+              <th key={c.key} scope="col" className={cn("px-3 py-2.5 font-semibold whitespace-nowrap", c.key !== "name" && "text-right")}>
                 <button
                   className="inline-flex items-center gap-1 hover:text-ink"
                   onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : c.key !== "name" }))}
@@ -95,7 +95,7 @@ function AgencyRanking({ data }: { data: Dashboard }) {
                 </button>
               </th>
             ))}
-            <th scope="col" className="w-40 px-4 py-2.5 font-semibold">
+            <th scope="col" className="w-40 px-3 py-2.5 font-semibold">
               Composição
             </th>
           </tr>
@@ -103,19 +103,19 @@ function AgencyRanking({ data }: { data: Dashboard }) {
         <tbody className="divide-y divide-line">
           {rows.map((row) => (
             <tr key={row.agency_id} className="hover:bg-surface/50">
-              <td className="px-4 py-2.5 font-semibold text-ink">{row.name}</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatNumber(row.total)}</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatNumber(row.by_outcome.approved)}</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatNumber(row.by_outcome.rejected)}</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatNumber(row.by_outcome.hired)}</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatNumber(row.by_outcome.withdrawn)}</td>
+              <td className="px-3 py-2.5 font-semibold text-ink">{row.name}</td>
+              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.total)}</td>
+              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.approved)}</td>
+              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.rejected)}</td>
+              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.hired)}</td>
+              <td className="tabular px-3 py-2.5 text-right">{formatNumber(row.by_outcome.withdrawn)}</td>
               {(["approval_rate", "hiring_rate", "withdrawal_rate"] as const).map((code, i) => (
-                <td key={code} className="tabular px-4 py-2.5 text-right whitespace-nowrap text-ink">
+                <td key={code} className="tabular px-3 py-2.5 text-right whitespace-nowrap text-ink">
                   {formatRate(row.rates[code])}
                   {i === 0 && row.low_sample && row.rate_base > 0 && <SampleTag base={row.rate_base} min={data.min_sample_size} />}
                 </td>
               ))}
-              <td className="px-4 py-2.5">
+              <td className="px-3 py-2.5">
                 <CompositionBar byOutcome={row.by_outcome} label={row.name} />
               </td>
             </tr>
@@ -126,17 +126,27 @@ function AgencyRanking({ data }: { data: Dashboard }) {
   );
 }
 
-function GroupTable({ groups, firstLabel, minGroup }: { groups: (GroupStats & { value?: string; name?: string; exam_date?: string | null; suppressed?: boolean })[]; firstLabel: string; minGroup?: number }) {
+function GroupTable({
+  groups,
+  firstLabel,
+  minGroup,
+  compact = false,
+}: {
+  groups: (GroupStats & { value?: string; name?: string; exam_date?: string | null; suppressed?: boolean })[];
+  firstLabel: string;
+  minGroup?: number;
+  compact?: boolean;
+}) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-[13px]">
+      <table className={cn("w-full text-left text-[13px]", !compact && "min-w-[560px]")}>
         <thead className="bg-surface/60 text-muted">
           <tr>
             <th className="px-4 py-2 font-semibold">{firstLabel}</th>
             <th className="px-4 py-2 text-right font-semibold">Candidaturas</th>
             <th className="px-4 py-2 text-right font-semibold">Aprovação</th>
             <th className="px-4 py-2 text-right font-semibold">Contratação</th>
-            <th className="w-40 px-4 py-2 font-semibold">Composição</th>
+            {!compact && <th className="w-28 px-4 py-2 font-semibold">Composição</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -145,8 +155,8 @@ function GroupTable({ groups, firstLabel, minGroup }: { groups: (GroupStats & { 
             return (
               <tr key={label}>
                 <td className="px-4 py-2.5 text-ink">
-                  <span className="font-medium">{label}</span>
-                  {g.exam_date && <span className="ml-1.5 text-muted">prova em {formatDate(g.exam_date)}</span>}
+                  <span className="block font-medium">{label}</span>
+                  {g.exam_date && <span className="block text-xs text-muted">Prova em {formatDate(g.exam_date)}</span>}
                 </td>
                 <td className="tabular px-4 py-2.5 text-right">{formatNumber(g.total)}</td>
                 {g.suppressed ? (
@@ -159,9 +169,11 @@ function GroupTable({ groups, firstLabel, minGroup }: { groups: (GroupStats & { 
                     <td className="tabular px-4 py-2.5 text-right">{formatRate(g.rates.hiring_rate)}</td>
                   </>
                 )}
-                <td className="px-4 py-2.5">
-                  <CompositionBar byOutcome={g.by_outcome} label={label} />
-                </td>
+                {!compact && (
+                  <td className="px-4 py-2.5">
+                    <CompositionBar byOutcome={g.by_outcome} label={label} />
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -415,7 +427,7 @@ export function PerformancePage() {
             )}
           </Panel>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <Panel>
               <PanelHeader title="Encerramentos sem sucesso" description="Status de reprovação e desistência, no total ou por agência." />
               <div className="p-5">
@@ -438,7 +450,7 @@ export function PerformancePage() {
                 <div key={dimension.key} className="min-w-0">
                   <h3 className="mb-2 text-sm font-semibold">{dimension.label}</h3>
                   <div className="rounded-[var(--radius-control)] border border-line">
-                    <GroupTable firstLabel={dimension.label} groups={dimension.groups} minGroup={data.profile_min_group} />
+                    <GroupTable compact firstLabel={dimension.label} groups={dimension.groups} minGroup={data.profile_min_group} />
                   </div>
                 </div>
               ))}

@@ -324,7 +324,7 @@ export function CatalogsPage() {
         )}
       </Panel>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
         {stages.data && <StagesEditor stages={stages.data} />}
         <Panel>
           <PanelHeader
