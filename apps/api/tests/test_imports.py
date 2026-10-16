@@ -368,3 +368,30 @@ def test_bulk_upload_limit(client, make_user):
     response = client.post("/api/imports/bulk", files=files)
     assert response.status_code == 422
     assert "20" in response.json()["detail"]
+
+
+def test_statuses_from_spreadsheets_can_be_deleted(client, make_user):
+    _admin(client, make_user)
+    content = _modify(_workbook(size=3), row=FIRST, column=COL["Status VGCF"], value="ENTRE")
+    content = _modify(content, row=FIRST + 1, column=COL["Status VGCF"], value="AGUA")
+    batch = _upload(client, content).json()
+
+    def statuses():
+        return {s["label"]: s for s in client.get("/api/admin/statuses").json()}
+
+    in_use = statuses()["ENTRE"]
+    response = client.delete(f"/api/admin/statuses/{in_use['id']}")
+    assert response.status_code == 409 and "candidatura" in response.json()["detail"]
+    official = statuses()["Entrevista"]
+    assert client.delete(f"/api/admin/statuses/{official['id']}").status_code == 409
+
+    client.delete(f"/api/imports/{batch['id']}")  # os status ficam sem uso
+    assert client.delete(f"/api/admin/statuses/{statuses()['AGUA']['id']}").status_code == 204
+    assert "AGUA" not in statuses()
+    assert client.post("/api/admin/statuses/cleanup").json() == {"deleted": 1}
+    remaining = statuses()
+    assert "ENTRE" not in remaining and len(remaining) == 9
+
+    # Reimportar recria o status, sem classificação.
+    _upload(client, content, "de-novo.xlsx")
+    assert statuses()["ENTRE"]["outcome"] == "unmapped"
