@@ -18,4 +18,4 @@ COPY --from=web /web/dist /app/apps/web/dist
 RUN useradd --create-home appuser && mkdir -p data && chown appuser data
 USER appuser
 EXPOSE 8000
-CMD ["sh", "-c", "python -m app.cli migrate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+CMD ["sh", "-c", "python -m app.cli migrate && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*"]

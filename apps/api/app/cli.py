@@ -100,6 +100,33 @@ def _create_user(name: str, email: str, role: str) -> None:
     print(f"• Usuário {email} ({role}) criado.")
 
 
+def _seed_demo(count: int) -> None:
+    from app.db.session import get_sessionmaker
+    from app.importing.demo import demo_cohorts
+    from app.importing.service import create_batch, process_batch
+    from app.models import ImportSource
+
+    with get_sessionmaker()() as db:
+        for file_name, content in demo_cohorts(count):
+            batch = create_batch(db, file_name=file_name, content=content, source=ImportSource.DEMO)
+            batch = process_batch(db, batch.id) or batch
+            print(f"• {file_name}: {batch.status.value} ({batch.rows_created} novas, "
+                  f"{batch.rows_unchanged} sem alteração)")
+
+
+def _demo_spreadsheet(path: str) -> None:
+    from datetime import date, timedelta
+
+    from app.importing.demo import build_cohort_workbook
+
+    content = build_cohort_workbook(
+        "DEMO T99", date.today() + timedelta(days=20), first_id=900000, size=60, seed=99
+    )
+    with open(path, "wb") as fh:
+        fh.write(content)
+    print(f"• Planilha fictícia gravada em {path}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -109,6 +136,10 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("--name", required=True)
     create.add_argument("--email", required=True)
     create.add_argument("--role", choices=["admin", "viewer"], default="viewer")
+    seed = sub.add_parser("seed-demo", help="Importa turmas FICTÍCIAS de demonstração")
+    seed.add_argument("--cohorts", type=int, default=8)
+    sheet = sub.add_parser("demo-spreadsheet", help="Gera uma planilha FICTÍCIA no modelo da turma")
+    sheet.add_argument("path")
 
     args = parser.parse_args(argv)
     if args.command == "init":
@@ -127,6 +158,10 @@ def main(argv: list[str] | None = None) -> None:
         _migrate()
     elif args.command == "create-user":
         _create_user(args.name, args.email, args.role)
+    elif args.command == "seed-demo":
+        _seed_demo(args.cohorts)
+    elif args.command == "demo-spreadsheet":
+        _demo_spreadsheet(args.path)
 
 
 if __name__ == "__main__":

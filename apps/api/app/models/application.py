@@ -53,8 +53,14 @@ class Application(TimestampMixin, Base):
     )
 
     # IDENTIFICAÇÃO
-    external_record_id: Mapped[str | None] = mapped_column(String(100))  # "ID do registro"
-    registered_at: Mapped[date | None] = mapped_column(Date, index=True)  # "Data de cadastro"
+    # "ID" da planilha: número do cadastro no site, usado como chave da candidatura.
+    external_record_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    registered_at: Mapped[date | None] = mapped_column(Date, index=True)  # "Cadastro no site" (dia)
+    site_registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # TURMA — vem do título da planilha (ex.: "SAFEE T61 - Prova 21/01/26")
+    cohort_name: Mapped[str | None] = mapped_column(String(120), index=True)
+    exam_date: Mapped[date | None] = mapped_column(Date, index=True)
 
     # ORIGEM
     regional_raw: Mapped[str | None] = mapped_column(String(200))

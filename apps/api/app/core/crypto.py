@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import re
@@ -16,7 +17,14 @@ _NON_DIGITS = re.compile(r"\D")
 
 @lru_cache
 def _fernet() -> Fernet:
-    return Fernet(get_settings().field_encryption_key.encode())
+    key = get_settings().field_encryption_key
+    try:
+        return Fernet(key.encode())
+    except ValueError:
+        # Valor que não é uma chave Fernet (ex.: segredo gerado pela hospedagem):
+        # deriva uma chave de 32 bytes de forma determinística.
+        derived = base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest())
+        return Fernet(derived)
 
 
 def encrypt_value(value: str) -> str:
