@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/*
+ * Design tokens — MetLife Recruitment CRM
+ *
+ * Base: branco e cinza claro. Azul institucional como cor de ação e navegação.
+ * Verde institucional reservado a indicadores positivos (nunca como texto sobre branco:
+ * contraste insuficiente — use green-700 para texto e green-500 para marcadores).
+ */
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eef6fb;
+  --color-brand-100: #d5e9f5;
+  --color-brand-200: #a9d2ec;
+  --color-brand-300: #6fb3dd;
+  --color-brand-400: #2f92cb;
+  --color-brand-500: #007abc; /* azul institucional */
+  --color-brand-600: #0061a0; /* azul profundo */
+  --color-brand-700: #004f84;
+  --color-brand-800: #003d67;
+  --color-brand-900: #082c48;
+
+  --color-green-50: #f4f9e8;
+  --color-green-100: #e5f1c9;
+  --color-green-500: #a4ce4e; /* verde institucional */
+  --color-green-600: #86b131;
+  --color-green-700: #5c7d1c;
+
+  --color-surface: #f5f7fa;
+  --color-line: #e3e8ef;
+  --color-line-strong: #cfd7e2;
+  --color-ink: #16283a; /* títulos */
+  --color-body: #475569; /* texto corrido */
+  --color-muted: #6b7a8d; /* texto auxiliar */
+
+  --color-danger-50: #fdf1f0;
+  --color-danger-600: #c2362b;
+  --color-warning-50: #fdf6e7;
+  --color-warning-700: #946200;
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+
+  --shadow-panel: 0 1px 2px rgb(22 40 58 / 0.04);
+  --shadow-overlay: 0 12px 32px -8px rgb(22 40 58 / 0.18), 0 2px 6px rgb(22 40 58 / 0.06);
+
+  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-in: fade-in 160ms ease-out;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-surface font-sans text-body;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply text-ink;
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
