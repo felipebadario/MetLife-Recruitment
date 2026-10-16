@@ -6,7 +6,7 @@ Aplicação interna de recrutamento de corretores: consolida as planilhas de tur
 
 - `apps/api` — backend Python 3.11+ (FastAPI, SQLAlchemy 2, Alembic). SQLite local; PostgreSQL no Render.
   - `app/importing/` — leitura do modelo de planilha da turma (`template.py`), lista oficial de status (`vgcf.py`), pipeline de importação (`service.py`), gerador de planilhas **fictícias** (`demo.py`).
-  - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (status, funil, fórmulas), `performance` (dashboard).
+  - `app/routers/` — `auth`, `admin` (usuários, auditoria), `candidates` (CRM), `imports`, `catalogs` (classificação de status, fórmulas), `performance` (dashboard).
   - `app/services/filters.py` — filtros globais compartilhados pelo CRM e pelo dashboard.
   - `alembic/versions/` — migrações escritas à mão; o CI roda `alembic check` contra os modelos.
 - `apps/web` — React 19 + TypeScript + Vite + Tailwind 4 + TanStack Query + React Router.
@@ -45,6 +45,9 @@ npm run build                          # checagem de tipos + build
 - Toda ação administrativa relevante grava em `audit_logs` via `record_audit`.
 - Interface: tokens de cor e tipografia em `apps/web/src/styles/index.css`; cores das categorias de resultado em `src/lib/outcomes.ts` (ordem fixa, validada para daltonismo). Textos em linguagem simples, sem caixa alta em rótulos.
 - Commits e PRs em português; o CI (`.github/workflows/ci.yml`) roda lint, testes em SQLite e PostgreSQL e o build do frontend.
+
+- **Importação**: até 20 planilhas por envio (`POST /api/imports/bulk`), processadas em sequência. Uma planilha pode ser excluída (`DELETE /api/imports/{id}`): o que veio só dela é apagado e o que também veio de outra volta aos dados da planilha anterior.
+- **Sem funil**: a análise usa só a classificação dos status. As tabelas `funnel_stages` e `process_statuses.funnel_stage_id` continuam no banco, sem uso, para não perder dados.
 
 ## Situação
 

@@ -20,12 +20,13 @@ from fastapi import (
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
 from app.auth.deps import DbSession, require_permission
 from app.auth.permissions import Permission
 from app.db.session import get_sessionmaker
 from app.importing.demo import build_cohort_workbook
-from app.importing.service import MAX_FILE_BYTES, create_batch, process_batch
+from app.importing.service import MAX_FILE_BYTES, create_batch, delete_batch, process_batch, sha256
 from app.models import (
     Agency,
     Application,
@@ -90,6 +91,12 @@ class BatchDetail(BaseModel):
     issues_total: int
 
 
+def run_imports(batch_ids: list[int]) -> None:
+    """Processa vários lotes em sequência, na ordem recebida."""
+    for batch_id in batch_ids:
+        run_import(batch_id)
+
+
 def run_import(batch_id: int) -> None:
     """Processa o lote em segundo plano, com sessão própria."""
     with get_sessionmaker()() as db:
@@ -99,14 +106,11 @@ def run_import(batch_id: int) -> None:
             logger.exception("Falha ao processar lote %s", batch_id)
 
 
-@router.post("", response_model=BatchOut, status_code=status.HTTP_202_ACCEPTED)
-async def upload(
-    request: Request,
-    background: BackgroundTasks,
-    user: ImportManager,
-    db: DbSession,
-    file: Annotated[UploadFile, File()],
-) -> ImportBatch:
+MAX_FILES_PER_UPLOAD = 20
+
+
+async def _read_upload(file: UploadFile) -> tuple[str, bytes]:
+    """Lê e valida um arquivo enviado. Erros saem como HTTPException com mensagem amigável."""
     name = file.filename or "planilha.xlsx"
     if not name.lower().endswith(".xlsx"):
         raise HTTPException(
@@ -121,7 +125,10 @@ async def upload(
         )
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Arquivo vazio.")
+    return name, content
 
+
+def _register(db: Session, request: Request, user: User, name: str, content: bytes) -> ImportBatch:
     batch = create_batch(db, file_name=name, content=content, user=user)
     record_audit(
         db,
@@ -132,9 +139,69 @@ async def upload(
         entity_id=batch.id,
         details={"file_name": name, "size": len(content), "status": batch.status.value},
     )
+    return batch
+
+
+@router.post("", response_model=BatchOut, status_code=status.HTTP_202_ACCEPTED)
+async def upload(
+    request: Request,
+    background: BackgroundTasks,
+    user: ImportManager,
+    db: DbSession,
+    file: Annotated[UploadFile, File()],
+) -> ImportBatch:
+    name, content = await _read_upload(file)
+    batch = _register(db, request, user, name, content)
     if batch.status == ImportStatus.RECEIVED:
         background.add_task(run_import, batch.id)
     return batch
+
+
+class UploadResult(BaseModel):
+    file_name: str
+    batch: BatchOut | None = None
+    error: str | None = None
+
+
+@router.post("/bulk", response_model=list[UploadResult], status_code=status.HTTP_202_ACCEPTED)
+async def upload_many(
+    request: Request,
+    background: BackgroundTasks,
+    user: ImportManager,
+    db: DbSession,
+    files: Annotated[list[UploadFile], File()],
+) -> list[UploadResult]:
+    """Recebe até 20 planilhas. São processadas uma por vez, na ordem enviada, para que uma
+    planilha mais nova atualize a anterior de forma previsível. Um arquivo inválido não
+    impede os demais."""
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Envie no máximo {MAX_FILES_PER_UPLOAD} planilhas por vez.",
+        )
+    results: list[UploadResult] = []
+    queued: list[int] = []
+    seen: dict[str, int] = {}
+    for file in files:
+        try:
+            name, content = await _read_upload(file)
+        except HTTPException as exc:
+            results.append(UploadResult(file_name=file.filename or "arquivo", error=str(exc.detail)))
+            continue
+        digest = sha256(content)
+        if digest in seen:
+            results.append(
+                UploadResult(file_name=name, error=f"Arquivo repetido neste envio (igual a {seen[digest]}º).")
+            )
+            continue
+        seen[digest] = len(results) + 1
+        batch = _register(db, request, user, name, content)
+        if batch.status == ImportStatus.RECEIVED:
+            queued.append(batch.id)
+        results.append(UploadResult(file_name=name, batch=BatchOut.model_validate(batch)))
+    if queued:
+        background.add_task(run_imports, queued)
+    return results
 
 
 @router.get("", response_model=Page[BatchOut])
@@ -173,7 +240,7 @@ class ResetIn(BaseModel):
 @router.post("/reset", status_code=status.HTTP_204_NO_CONTENT)
 def reset_candidate_data(payload: ResetIn, request: Request, user: ImportManager, db: DbSession) -> None:
     """Apaga candidatos, candidaturas e importações. Mantém usuários, auditoria e a
-    classificação de status, etapas do funil e fórmulas dos indicadores."""
+    classificação de status e fórmulas dos indicadores."""
     if payload.confirmation.strip().upper() != "APAGAR":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -250,3 +317,34 @@ def reprocess(
     )
     background.add_task(run_import, batch.id)
     return batch
+
+
+class DeleteOut(BaseModel):
+    applications_removed: int
+    applications_restored: int
+    candidates_removed: int
+
+
+@router.delete("/{batch_id}", response_model=DeleteOut)
+def delete_import(batch_id: int, request: Request, user: ImportManager, db: DbSession) -> DeleteOut:
+    """Exclui uma planilha importada (por exemplo, enviada em duplicidade) e desfaz o que ela trouxe."""
+    batch = db.get(ImportBatch, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importação não encontrada.")
+    if batch.status in (ImportStatus.RECEIVED, ImportStatus.PROCESSING):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta planilha ainda está sendo processada. Aguarde terminar para excluir.",
+        )
+    details = {"file_name": batch.file_name, "cohort_name": batch.cohort_name}
+    result = delete_batch(db, batch)
+    record_audit(
+        db,
+        action="imports.deleted",
+        request=request,
+        actor=user,
+        entity_type="import_batch",
+        entity_id=batch_id,
+        details={**details, **result.__dict__},
+    )
+    return DeleteOut(**result.__dict__)

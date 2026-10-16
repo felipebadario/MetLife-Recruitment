@@ -99,37 +99,6 @@ export function HorizontalBars({
   );
 }
 
-/** Funil: cada etapa como barra centralizada, com conversão sobre a etapa anterior. */
-export function FunnelChart({ steps }: { steps: { label: string; count: number; provisional?: boolean }[] }) {
-  const first = steps[0]?.count || 1;
-  return (
-    <ol className="flex flex-col gap-2">
-      {steps.map((step, index) => {
-        const previous = index > 0 ? steps[index - 1].count : null;
-        return (
-          <li key={step.label} className="grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 text-[13px]">
-            <span className="truncate text-ink" title={step.label}>
-              {step.label}
-            </span>
-            <div className="flex h-7 justify-center rounded-[4px] bg-surface">
-              <div
-                className="h-full rounded-[4px] bg-brand-500 transition-[width]"
-                style={{ width: `${Math.max((step.count / first) * 100, step.count ? 1.5 : 0)}%`, opacity: 1 - index * 0.09 }}
-              />
-            </div>
-            <span className="tabular w-28 text-right text-body">
-              {formatNumber(step.count)}
-              {previous != null && (
-                <span className="ml-1 text-xs text-muted">({percent(step.count, previous)})</span>
-              )}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 /** Colunas empilhadas por período (ex.: candidaturas por mês, por resultado). */
 export function StackedColumns({
   periods,

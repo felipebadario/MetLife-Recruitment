@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ListChecks, Plus, Trash2 } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
@@ -11,7 +11,7 @@ import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
 import { OUTCOME_COLORS, OUTCOME_LABELS, OUTCOME_ORDER } from "@/lib/outcomes";
-import type { CatalogStatus, FunnelStage, MetricDefinition, Outcome } from "@/lib/types";
+import type { CatalogStatus, MetricDefinition, Outcome } from "@/lib/types";
 import { formatNumber } from "@/lib/utils";
 
 const CLASSIFIABLE: Outcome[] = OUTCOME_ORDER.filter((o) => o !== "unmapped");
@@ -29,7 +29,7 @@ function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : "Não foi possível salvar.";
 }
 
-function StatusRow({ status, stages }: { status: CatalogStatus; stages: FunnelStage[] }) {
+function StatusRow({ status }: { status: CatalogStatus }) {
   const refresh = useRefreshAll();
   const [label, setLabel] = useState(status.label);
   const [abbreviation, setAbbreviation] = useState(status.abbreviation ?? "");
@@ -88,113 +88,9 @@ function StatusRow({ status, stages }: { status: CatalogStatus; stages: FunnelSt
             ))}
           </Select>
         </div>
-      </td>
-      <td className="px-5 py-3">
-        <Select
-          aria-label={`Etapa do funil de ${status.code}`}
-          value={status.funnel_stage_id ?? ""}
-          onChange={(e) =>
-            update.mutate(e.target.value ? { funnel_stage_id: Number(e.target.value) } : { clear_funnel_stage: true })
-          }
-          className="h-9 min-w-44 text-[13px]"
-        >
-          <option value="">Fora do funil</option>
-          {stages.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
         {update.error && <p className="mt-1 text-xs text-danger-600">{errorText(update.error)}</p>}
       </td>
     </tr>
-  );
-}
-
-function StagesEditor({ stages }: { stages: FunnelStage[] }) {
-  const refresh = useRefreshAll();
-  const [label, setLabel] = useState("");
-  const create = useMutation({
-    mutationFn: () => api.post("/api/admin/funnel-stages", { label }),
-    onSuccess: () => {
-      setLabel("");
-      refresh();
-    },
-  });
-  const update = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
-      api.patch(`/api/admin/funnel-stages/${id}`, body),
-    onSuccess: refresh,
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => api.delete(`/api/admin/funnel-stages/${id}`),
-    onSuccess: refresh,
-  });
-
-  function move(index: number, direction: -1 | 1) {
-    const other = stages[index + direction];
-    const current = stages[index];
-    if (!other) return;
-    update.mutate({ id: current.id, body: { position: other.position } });
-    update.mutate({ id: other.id, body: { position: current.position } });
-  }
-
-  return (
-    <Panel>
-      <PanelHeader
-        title="Etapas do funil"
-        description="Ordem em que as candidaturas avançam. Cada status acima pode ser associado a uma etapa."
-      />
-      <ol className="divide-y divide-line">
-        {stages.map((stage, index) => (
-          <li key={stage.id} className="flex items-center gap-3 px-5 py-2.5">
-            <span className="tabular w-6 text-[13px] text-muted">{index + 1}.</span>
-            <Input
-              aria-label={`Nome da etapa ${index + 1}`}
-              defaultValue={stage.label}
-              onBlur={(e) => e.target.value.trim() && e.target.value !== stage.label && update.mutate({ id: stage.id, body: { label: e.target.value } })}
-              className="h-9 max-w-xs text-[13px]"
-            />
-            {stage.is_provisional && <Badge tone="warning">Ilustrativa</Badge>}
-            <div className="ml-auto flex gap-1">
-              <Button variant="ghost" size="sm" aria-label="Mover para cima" disabled={index === 0} onClick={() => move(index, -1)}>
-                <ArrowUp className="size-4" />
-              </Button>
-              <Button variant="ghost" size="sm" aria-label="Mover para baixo" disabled={index === stages.length - 1} onClick={() => move(index, 1)}>
-                <ArrowDown className="size-4" />
-              </Button>
-              <Button variant="ghost" size="sm" aria-label={`Excluir etapa ${stage.label}`} onClick={() => remove.mutate(stage.id)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (label.trim()) create.mutate();
-        }}
-        className="flex items-center gap-2 border-t border-line px-5 py-3"
-      >
-        <Input
-          aria-label="Nova etapa"
-          placeholder="Nome da nova etapa"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          className="h-9 max-w-xs text-[13px]"
-        />
-        <Button size="sm" type="submit" loading={create.isPending} disabled={!label.trim()}>
-          <Plus className="size-4" aria-hidden />
-          Adicionar etapa
-        </Button>
-      </form>
-      {(create.error || update.error || remove.error) && (
-        <div className="px-5 pb-4">
-          <Alert>{errorText(create.error ?? update.error ?? remove.error)}</Alert>
-        </div>
-      )}
-    </Panel>
   );
 }
 
@@ -281,10 +177,6 @@ export function CatalogsPage() {
     queryKey: ["catalog", "statuses"],
     queryFn: () => api.get<CatalogStatus[]>("/api/admin/statuses"),
   });
-  const stages = useQuery({
-    queryKey: ["catalog", "stages"],
-    queryFn: () => api.get<FunnelStage[]>("/api/admin/funnel-stages"),
-  });
   const metrics = useQuery({
     queryKey: ["catalog", "metrics"],
     queryFn: () => api.get<MetricDefinition[]>("/api/admin/metrics"),
@@ -306,7 +198,7 @@ export function CatalogsPage() {
             </Alert>
           </div>
         )}
-        {statuses.isPending || stages.isPending ? (
+        {statuses.isPending ? (
           <div className="flex flex-col gap-2.5 p-5">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-10 w-full" />
@@ -324,19 +216,18 @@ export function CatalogsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[940px] text-left text-[13px]">
+            <table className="w-full min-w-[760px] text-left text-[13px]">
               <thead className="bg-surface/60 text-muted">
                 <tr>
                   <th className="px-5 py-2.5 font-semibold">Status VGCF na planilha</th>
                   <th className="px-5 py-2.5 font-semibold">Nome de exibição</th>
                   <th className="px-5 py-2.5 font-semibold">Abreviação</th>
                   <th className="px-5 py-2.5 font-semibold">Classificação</th>
-                  <th className="px-5 py-2.5 font-semibold">Etapa do funil</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {statuses.data.map((status) => (
-                  <StatusRow key={status.id} status={status} stages={stages.data ?? []} />
+                  <StatusRow key={status.id} status={status} />
                 ))}
               </tbody>
             </table>
@@ -344,8 +235,7 @@ export function CatalogsPage() {
         )}
       </Panel>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        {stages.data && <StagesEditor stages={stages.data} />}
+      <div className="grid items-start gap-6">
         <Panel>
           <PanelHeader
             title="Fórmulas dos indicadores"

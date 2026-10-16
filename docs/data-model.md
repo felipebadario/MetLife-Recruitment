@@ -8,7 +8,7 @@ agencies ─────────────┐
 candidates ──1:N── applications ──1:N── application_status_history
                       │            ├─1:N── application_field_changes
                       │            └─1:N── internal_notes
-                      ├── N:1 process_statuses ── N:1 funnel_stages
+                      ├── N:1 process_statuses   (funnel_stages fica no banco, sem uso)
                       └── N:1 loss_reasons
 
 import_batches ──1:N── import_rows

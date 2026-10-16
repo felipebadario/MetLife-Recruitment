@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, FileSpreadsheet, RotateCcw, Upload } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
 
 import { Alert } from "@/components/ui/Alert";
@@ -11,7 +11,7 @@ import { Field, Input } from "@/components/ui/Field";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { api, ApiError } from "@/lib/api";
-import type { ImportBatch, ImportDetail, ImportStatus, Page } from "@/lib/types";
+import type { ImportBatch, ImportDeleteResult, ImportDetail, ImportStatus, Page, UploadResult } from "@/lib/types";
 import { cn, formatDate, formatDateTime, formatNumber } from "@/lib/utils";
 
 const STATUS: Record<ImportStatus, { label: string; tone: "neutral" | "brand" | "positive" | "warning" | "danger" }> = {
@@ -24,6 +24,7 @@ const STATUS: Record<ImportStatus, { label: string; tone: "neutral" | "brand" | 
 };
 
 const BATCHES_KEY = ["imports"] as const;
+const MAX_FILES = 20;
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
@@ -40,14 +41,21 @@ function UploadZone() {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [sampleError, setSampleError] = useState<string | null>(null);
+  const [limitError, setLimitError] = useState<string | null>(null);
   const upload = useMutation({
-    mutationFn: (file: File) => api.upload<ImportBatch>("/api/imports", file),
+    mutationFn: (files: File[]) => api.upload<UploadResult[]>("/api/imports/bulk", files),
     onSuccess: () => invalidateData(queryClient),
   });
 
-  function pick(files: FileList | null) {
-    const file = files?.[0];
-    if (file) upload.mutate(file);
+  function pick(list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
+    if (files.length > MAX_FILES) {
+      setLimitError(`Você selecionou ${files.length} arquivos. Envie no máximo ${MAX_FILES} planilhas por vez.`);
+      return;
+    }
+    setLimitError(null);
+    upload.mutate(files);
   }
 
   function onDrop(event: DragEvent) {
@@ -56,13 +64,13 @@ function UploadZone() {
     pick(event.dataTransfer.files);
   }
 
-  const result = upload.data;
+  const results = upload.data;
 
   return (
     <Panel>
       <PanelHeader
-        title="Importar planilha da turma"
-        description="Arquivo .xlsx no modelo da turma: título com a turma e a data da prova, seguido do cabeçalho com ID, Agência, Nome, Status e demais colunas."
+        title="Importar planilhas das turmas"
+        description="Arquivos .xlsx no modelo da turma: título com a turma e a data da prova, seguido do cabeçalho com ID, Agência, Nome, Status VGCF e demais colunas."
         actions={
           <Button
             variant="secondary"
@@ -93,8 +101,10 @@ function UploadZone() {
             <Upload className="size-5" aria-hidden />
           </div>
           <div>
-            <p className="text-sm font-semibold text-ink">Arraste a planilha aqui</p>
-            <p className="text-[13px] text-muted">ou escolha o arquivo no computador (até 10 MB)</p>
+            <p className="text-sm font-semibold text-ink">Arraste as planilhas aqui</p>
+            <p className="text-[13px] text-muted">
+              ou escolha no computador: até {MAX_FILES} arquivos por vez, com até 10 MB cada
+            </p>
           </div>
           <input
             ref={input}
@@ -102,34 +112,119 @@ function UploadZone() {
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="sr-only"
             id="import-file"
+            multiple
             onChange={(e) => {
               pick(e.target.files);
               e.target.value = "";
             }}
           />
           <Button onClick={() => input.current?.click()} loading={upload.isPending}>
-            Escolher arquivo
+            Escolher arquivos
           </Button>
         </div>
-        {upload.error && <Alert className="mt-4">{errorText(upload.error, "Não foi possível enviar o arquivo.")}</Alert>}
+        {limitError && <Alert className="mt-4">{limitError}</Alert>}
+        {upload.error && <Alert className="mt-4">{errorText(upload.error, "Não foi possível enviar os arquivos.")}</Alert>}
         {sampleError && <Alert className="mt-4">{sampleError}</Alert>}
-        {result && (
-          <Alert tone="info" className="mt-4">
-            {result.status === "skipped_duplicate"
-              ? result.error_message
-              : `Arquivo ${result.file_name} recebido. O resultado aparece na lista abaixo em instantes.`}
-          </Alert>
-        )}
+        {results && <UploadSummary results={results} />}
         <p className="mt-4 text-xs text-muted">
-          Reimportar uma planilha atualizada da mesma turma é seguro: candidaturas sem mudança ficam como estão, e
-          mudanças de status entram no histórico de cada candidato.
+          As planilhas são processadas uma por vez, na ordem em que foram escolhidas. Reimportar uma planilha
+          atualizada da mesma turma é seguro: candidaturas sem mudança ficam como estão, e mudanças de status entram
+          no histórico de cada candidato. Se uma planilha entrar por engano, exclua-a no histórico abaixo.
         </p>
       </div>
     </Panel>
   );
 }
 
-function BatchDialog({ batchId, onClose }: { batchId: number; onClose: () => void }) {
+function UploadSummary({ results }: { results: UploadResult[] }) {
+  const received = results.filter((r) => r.batch && r.batch.status !== "skipped_duplicate").length;
+  return (
+    <div className="mt-4 rounded-[var(--radius-control)] border border-line">
+      <p className="border-b border-line bg-surface/60 px-4 py-2.5 text-[13px] text-body">
+        {received === 1 ? "1 planilha recebida" : `${received} planilhas recebidas`}. O resultado de cada uma aparece
+        no histórico abaixo em instantes.
+      </p>
+      <ul className="max-h-60 divide-y divide-line overflow-y-auto text-[13px]">
+        {results.map((r, index) => {
+          const skipped = r.batch?.status === "skipped_duplicate";
+          return (
+            <li key={`${r.file_name}-${index}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+              <span className="min-w-0 flex-1 truncate font-medium text-ink">{r.file_name}</span>
+              {r.error ? (
+                <Badge tone="danger">{r.error}</Badge>
+              ) : skipped ? (
+                <Badge tone="neutral">Já importada antes</Badge>
+              ) : (
+                <Badge tone="positive">Recebida</Badge>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function DeleteBatchDialog({ batch, onClose }: { batch: ImportBatch; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => api.delete<ImportDeleteResult>(`/api/imports/${batch.id}`),
+    onSuccess: () => invalidateData(queryClient),
+  });
+  const result = remove.data;
+
+  return (
+    <DialogRoot open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent title="Excluir planilha" description={batch.file_name}>
+        {result ? (
+          <div className="flex flex-col gap-4">
+            <Alert tone="info">
+              Planilha excluída. {formatNumber(result.applications_removed)} candidaturas removidas
+              {result.applications_restored > 0 &&
+                ` e ${formatNumber(result.applications_restored)} voltaram aos dados da planilha anterior`}
+              .
+            </Alert>
+            <div className="flex justify-end">
+              <Button onClick={onClose}>Fechar</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 text-[13px] text-body">
+            <p>Use para desfazer uma planilha enviada em duplicidade ou por engano.</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Candidaturas que vieram só desta planilha são apagadas, com histórico e observações.</li>
+              <li>
+                Candidaturas que também vieram de outra planilha continuam e voltam aos dados da planilha anterior mais
+                recente.
+              </li>
+            </ul>
+            <p className="font-medium text-ink">Essa ação não pode ser desfeita.</p>
+            {remove.error && <Alert>{errorText(remove.error, "Não foi possível excluir.")}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button variant="danger" onClick={() => remove.mutate()} loading={remove.isPending}>
+                <Trash2 className="size-4" aria-hidden />
+                Excluir planilha
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </DialogRoot>
+  );
+}
+
+function BatchDialog({
+  batchId,
+  onClose,
+  onDelete,
+}: {
+  batchId: number;
+  onClose: () => void;
+  onDelete: (batch: ImportBatch) => void;
+}) {
   const queryClient = useQueryClient();
   const detail = useQuery({
     queryKey: ["imports", batchId],
@@ -143,6 +238,7 @@ function BatchDialog({ batchId, onClose }: { batchId: number; onClose: () => voi
     },
   });
   const b = detail.data?.batch;
+  const busy = b?.status === "received" || b?.status === "processing";
 
   return (
     <DialogRoot open onOpenChange={(open) => !open && onClose()}>
@@ -209,7 +305,11 @@ function BatchDialog({ batchId, onClose }: { batchId: number; onClose: () => voi
               )}
             </div>
             {reprocess.error && <Alert>{errorText(reprocess.error, "Não foi possível reprocessar.")}</Alert>}
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="ghost" className="mr-auto text-danger-600" onClick={() => onDelete(b)} disabled={busy}>
+                <Trash2 className="size-4" aria-hidden />
+                Excluir planilha
+              </Button>
               <Button variant="secondary" onClick={onClose}>
                 Fechar
               </Button>
@@ -284,6 +384,7 @@ function ResetData() {
 
 export function ImportsPage() {
   const [selected, setSelected] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<ImportBatch | null>(null);
   const batches = useQuery({
     queryKey: BATCHES_KEY,
     queryFn: () => api.get<Page<ImportBatch>>("/api/imports?page_size=50"),
@@ -311,7 +412,7 @@ export function ImportsPage() {
           <EmptyState icon={FileSpreadsheet} title="Nenhuma planilha importada ainda" description="O histórico aparece aqui depois do primeiro envio." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-[13px]">
+            <table className="w-full min-w-[900px] text-left text-[13px]">
               <thead className="bg-surface/60 text-muted">
                 <tr>
                   <th className="px-5 py-2.5 font-semibold">Arquivo</th>
@@ -321,6 +422,9 @@ export function ImportsPage() {
                   <th className="px-5 py-2.5 text-right font-semibold">Criadas</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Atualizadas</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Rejeitadas</th>
+                  <th className="w-12 px-3 py-2.5">
+                    <span className="sr-only">Ações</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -345,6 +449,24 @@ export function ImportsPage() {
                     <td className={cn("tabular px-5 py-2.5 text-right", b.rows_rejected > 0 && "font-semibold text-danger-600")}>
                       {formatNumber(b.rows_rejected)}
                     </td>
+                    <td className="px-3 py-1.5 text-right">
+                      {b.status !== "received" && b.status !== "processing" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Excluir planilha ${b.file_name}`}
+                          title="Excluir planilha"
+                          className="px-2 hover:text-danger-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleting(b);
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -353,7 +475,17 @@ export function ImportsPage() {
         )}
       </Panel>
       <ResetData />
-      {selected != null && <BatchDialog batchId={selected} onClose={() => setSelected(null)} />}
+      {selected != null && (
+        <BatchDialog
+          batchId={selected}
+          onClose={() => setSelected(null)}
+          onDelete={(b) => {
+            setSelected(null);
+            setDeleting(b);
+          }}
+        />
+      )}
+      {deleting && <DeleteBatchDialog batch={deleting} onClose={() => setDeleting(null)} />}
     </div>
   );
 }

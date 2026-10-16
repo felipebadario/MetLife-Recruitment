@@ -17,7 +17,7 @@ No plano gratuito, o serviço hiberna após um período sem uso; o primeiro aces
 ## Como validar com a planilha
 
 1. Em **Administração > Importações**, envie a planilha da turma (.xlsx) ou baixe a **planilha fictícia de teste** no mesmo modelo.
-2. Em **Administração > Status e catálogos**, classifique cada status VGCF (Pagamento Confirmado, Reprovado Entrevista...) e associe-o a uma etapa do funil.
+2. Em **Administração > Status e catálogos**, classifique cada status VGCF (Pagamento Confirmado, Reprovado Entrevista...).
 3. Abra **Performance** e **Candidatos**: os indicadores e filtros já refletem a classificação.
 
 Para trocar a base de teste pela real, use **Apagar dados** no fim da página de Importações (mantém usuários e a classificação dos status).

@@ -226,3 +226,88 @@ def test_status_abbreviation_is_display_only(client, make_user):
 
     cleared = client.patch(f"/api/admin/statuses/{status['id']}", json={"abbreviation": ""}).json()
     assert cleared["abbreviation"] is None
+
+
+def _counts():
+    with get_sessionmaker()() as db:
+        return (
+            db.scalar(select(func.count()).select_from(Application)),
+            db.scalar(select(func.count()).select_from(Candidate)),
+        )
+
+
+def test_delete_batch_removes_only_its_applications(client, make_user):
+    _admin(client, make_user)
+    first = _upload(client, _workbook(size=10)).json()
+    other = build_cohort_workbook("DEMO T71", date(2026, 2, 10), first_id=6000, size=5, seed=7)
+    _upload(client, other, "t71.xlsx")
+    assert _counts()[0] == 15
+
+    response = client.delete(f"/api/imports/{first['id']}")
+    assert response.status_code == 200
+    assert response.json()["applications_removed"] == 10
+    assert _counts()[0] == 5
+    assert client.get(f"/api/imports/{first['id']}").status_code == 404
+
+
+def test_delete_duplicate_restores_previous_data(client, make_user):
+    _admin(client, make_user)
+    content = _workbook(size=5)
+    _upload(client, content)
+    original = _status_of("5000")
+    wrong_status = "Entrevista" if original != "Entrevista" else "Validação SUSEP"
+    # A mesma turma enviada de novo, com um status diferente para o primeiro candidato.
+    duplicate = _upload(client, _modify(content, row=3, column=10, value=wrong_status), "duplicada.xlsx").json()
+    assert _status_of("5000") == wrong_status
+
+    result = client.delete(f"/api/imports/{duplicate['id']}").json()
+    assert result == {"applications_removed": 0, "applications_restored": 1, "candidates_removed": 0}
+    assert _status_of("5000") == original
+    assert _counts()[0] == 5
+    with get_sessionmaker()() as db:
+        app = db.scalar(select(Application).where(Application.external_record_id == "5000"))
+        history = db.scalar(
+            select(func.count()).where(ApplicationStatusHistory.application_id == app.id)
+        )
+        assert history == 1  # a mudança trazida pela planilha excluída some do histórico
+
+
+def _status_of(record_id: str) -> str:
+    with get_sessionmaker()() as db:
+        return db.scalar(select(Application.status_raw).where(Application.external_record_id == record_id))
+
+
+def test_viewer_cannot_delete_batch(client, make_user):
+    _admin(client, make_user)
+    batch = _upload(client, _workbook(size=3)).json()
+    make_user("viewer@example.com", UserRole.VIEWER)
+    login(client, "viewer@example.com")
+    assert client.delete(f"/api/imports/{batch['id']}").status_code == 403
+
+
+def test_bulk_upload_processes_in_order(client, make_user):
+    _admin(client, make_user)
+    files = [
+        ("files", (f"t{n}.xlsx", build_cohort_workbook(f"DEMO T{n}", date(2026, 1, n), first_id=n * 100,
+                                                      size=3, seed=n), XLSX))
+        for n in range(1, 4)
+    ]
+    files.append(("files", ("t1-de-novo.xlsx", files[0][1][1], XLSX)))
+    files.append(("files", ("notas.txt", b"x", "text/plain")))
+    response = client.post("/api/imports/bulk", files=files)
+    assert response.status_code == 202
+    results = response.json()
+    assert [bool(r["batch"]) for r in results] == [True, True, True, False, False]
+    assert "repetido" in results[3]["error"] and ".xlsx" in results[4]["error"]
+    batches = client.get("/api/imports").json()["items"]
+    assert len(batches) == 3 and all(b["status"] == "completed" for b in batches)
+    assert _counts()[0] == 9
+
+
+def test_bulk_upload_limit(client, make_user):
+    _admin(client, make_user)
+    content = _workbook(size=1)
+    files = [("files", (f"t{n}.xlsx", content, XLSX)) for n in range(21)]
+    response = client.post("/api/imports/bulk", files=files)
+    assert response.status_code == 422
+    assert "20" in response.json()["detail"]

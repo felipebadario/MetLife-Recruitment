@@ -144,6 +144,18 @@ export type ImportStatus =
   | "failed"
   | "skipped_duplicate";
 
+export interface UploadResult {
+  file_name: string;
+  batch: ImportBatch | null;
+  error: string | null;
+}
+
+export interface ImportDeleteResult {
+  applications_removed: number;
+  applications_restored: number;
+  candidates_removed: number;
+}
+
 export interface ImportBatch {
   id: number;
   source: string;
@@ -189,19 +201,9 @@ export interface CatalogStatus {
   abbreviation: string | null;
   is_official: boolean;
   outcome: Outcome;
-  funnel_stage_id: number | null;
   is_provisional: boolean;
   raw_values: string[];
   applications: number;
-}
-
-export interface FunnelStage {
-  id: number;
-  code: string;
-  label: string;
-  position: number;
-  is_active: boolean;
-  is_provisional: boolean;
 }
 
 export interface MetricDefinition {
@@ -243,8 +245,6 @@ export interface Dashboard {
   agencies: (GroupStats & { agency_id: number; name: string })[];
   statuses: { status_id: number | null; label: string; outcome: Outcome; count: number }[];
   agency_status: { agency_id: number; status_id: number | null; count: number }[];
-  funnel: { id: number | null; label: string; count: number; is_provisional: boolean }[];
-  funnel_configured: boolean;
   timeline: (GroupStats & { period: string })[];
   cohorts: (GroupStats & { name: string; exam_date: string | null })[];
   profile: { key: string; label: string; groups: (GroupStats & { value: string; suppressed?: boolean })[] }[];
