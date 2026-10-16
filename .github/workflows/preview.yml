@@ -41,6 +41,7 @@ jobs:
           XLSX_FILE=/tmp/turma.xlsx node scripts/preview-smoke.mjs
       - name: Guarda as capturas na branch preview-shots
         if: always()
+        working-directory: .
         run: |
           [ -d preview-shots ] || exit 0
           cd preview-shots
