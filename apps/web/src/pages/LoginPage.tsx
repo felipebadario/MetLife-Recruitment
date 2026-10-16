@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { ApiError } from "@/lib/api";
+import { PREVIEW, PREVIEW_ACCOUNTS } from "@/lib/preview";
 
 const HIGHLIGHTS = [
   {
@@ -65,7 +66,9 @@ export function LoginPage() {
         </svg>
         <BrandMark inverted className="relative" />
         <div className="relative max-w-md">
-          <h2 className="text-[32px] leading-[1.15] font-semibold text-white">
+          {/* Fio branco acima do título, como nas seções do site institucional */}
+          <div className="mb-8 h-0.5 w-full bg-white/80" aria-hidden />
+          <h2 className="text-[38px] leading-[1.12] font-semibold tracking-tight text-white">
             Recrutamento de corretores, das indicações à contratação.
           </h2>
           <ul className="mt-8 flex flex-col gap-4">
@@ -117,9 +120,35 @@ export function LoginPage() {
               Entrar
             </Button>
           </form>
-          <p className="mt-8 text-[13px] text-muted">
-            Esqueceu a senha? Peça a um administrador para redefini-la.
-          </p>
+          {PREVIEW ? (
+            <div className="mt-8 rounded-[var(--radius-panel)] border border-brand-100 bg-brand-50 p-4">
+              <p className="text-[13px] font-semibold text-ink">Contas de demonstração</p>
+              <p className="mt-0.5 text-[13px] text-muted">
+                Esta pré-visualização roda sem servidor. Escolha um perfil para preencher o acesso.
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                {PREVIEW_ACCOUNTS.map((account) => (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword(account.password);
+                      setError(null);
+                    }}
+                    className="flex items-center justify-between rounded-[var(--radius-control)] border border-line bg-white px-3 py-2 text-left text-[13px] hover:border-brand-300"
+                  >
+                    <span className="font-semibold text-ink">{account.label}</span>
+                    <span className="text-muted">{account.email}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-8 text-[13px] text-muted">
+              Esqueceu a senha? Peça a um administrador para redefini-la.
+            </p>
+          )}
         </div>
       </section>
     </div>
