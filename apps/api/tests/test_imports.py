@@ -30,7 +30,7 @@ def _workbook(size: int = 20, seed: int = 1) -> bytes:
 
 def _modify(content: bytes, row: int, column: int, value: object) -> bytes:
     wb = load_workbook(io.BytesIO(content))
-    wb.active.cell(row=row, column=column, value=value)
+    wb.active.cell(row=row, column=column).value = value
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
